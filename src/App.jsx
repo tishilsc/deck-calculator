@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Calculator, Hammer, AlertCircle } from 'lucide-react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 export default function App() {
   const [installWidth, setInstallWidth] = useState('3000');
@@ -287,6 +288,7 @@ export default function App() {
           </a>
         </div>
       </div>
+      <SpeedInsights />
     </div>
   );
 }
