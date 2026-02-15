@@ -1,0 +1,22 @@
+{
+  "name": "ウッドデッキ床板計算ツール",
+  "short_name": "床板計算",
+  "description": "ウッドデッキ・木道施工用の床板幅調整計算ツール",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#f59e0b",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
