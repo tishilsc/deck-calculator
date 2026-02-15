@@ -27,8 +27,8 @@ export default function App() {
 
     const solutions = [];
 
-    // 最大30枚まで試行
-    for (let totalBoards = 1; totalBoards <= 30; totalBoards++) {
+    // 最大1000枚まで試行
+    for (let totalBoards = 1; totalBoards <= 1000; totalBoards++) {
       for (let adjustedBoards = 0; adjustedBoards <= totalBoards; adjustedBoards++) {
         const standardBoards = totalBoards - adjustedBoards;
         
