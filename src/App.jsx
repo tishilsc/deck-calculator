@@ -274,6 +274,18 @@ export default function App() {
             <li>• 調整枚数が少なく、幅が広い順に表示されます</li>
           </ul>
         </div>
+
+        <div className="mt-6 text-center pb-4">
+          <a 
+            href="https://lasco.jp/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-amber-600 transition-colors"
+          >
+            <span>Powered by</span>
+            <span className="font-bold">株式会社ラスコジャパン</span>
+          </a>
+        </div>
       </div>
     </div>
   );
