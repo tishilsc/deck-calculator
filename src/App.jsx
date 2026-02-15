@@ -6,7 +6,7 @@ export default function App() {
   const [boardWidth, setBoardWidth] = useState('150');
   const [jointWidth, setJointWidth] = useState('5');
   const [minBoardWidth, setMinBoardWidth] = useState('80');
-  const [edgeJoints, setEdgeJoints] = useState(false);
+  const [edgeJoints, setEdgeJoints] = useState(true);
   const [results, setResults] = useState(null);
 
   const calculateBoards = () => {
