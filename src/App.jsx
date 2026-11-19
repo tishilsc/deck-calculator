@@ -8,7 +8,6 @@ const EDGE_OPTIONS = [
   { value: 'none', label: 'なし' }
 ];
 const EDGE_LABEL = { both: '両端にあり', one: '片側のみ', none: 'なし' };
-const EDGE_SHORT = { both: '両端あり', one: '片側のみ', none: '端なし' };
 
 const svgProps = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
 const IconBoard = () => (
@@ -40,6 +39,9 @@ const AppLogo = () => (
     <rect x="48.5" y="11" width="4.5" height="32" rx="1.6" fill="#7c2d12" />
     <path d="M11 52H53M11 48.5V55.5M53 48.5V55.5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" fill="none" />
   </svg>
+);
+const IconSliders = () => (
+  <svg {...svgProps} strokeWidth={2.4}><path d="M4 7h10M18 7h2M4 17h2M10 17h10" /><circle cx="16" cy="7" r="2" /><circle cx="8" cy="17" r="2" /></svg>
 );
 const IconClose = () => (
   <svg {...svgProps} strokeWidth={2.6}><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -424,25 +426,53 @@ https://lasco.jp/`;
           </div>
           {errors.installWidth && <p className="text-red-600 text-sm mt-1">{errors.installWidth}</p>}
 
+          {/* 端の目地: よく変えるので折りたたみの外に常時表示 */}
           <div className="flex items-center gap-2 mt-2">
-            <div className="flex flex-wrap gap-1.5 flex-1 text-[13px] text-gray-600">
-              <span className="bg-gray-100 rounded-full px-2 py-0.5">床板 <b className="text-gray-900">{boardWidth || '–'}</b></span>
-              <span className="bg-gray-100 rounded-full px-2 py-0.5">目地 <b className="text-gray-900">{jointWidth || '–'}</b></span>
-              <span className="bg-gray-100 rounded-full px-2 py-0.5">最低 <b className="text-gray-900">{minBoardWidth || '–'}</b></span>
-              <span className="bg-gray-100 rounded-full px-2 py-0.5">{EDGE_SHORT[edgeMode]}</span>
+            <span className="flex-none text-[13px] font-bold text-gray-600">端の目地</span>
+            <div className="flex-1 grid grid-cols-3 bg-gray-100 rounded-lg p-0.5" role="radiogroup" aria-label="端の目地">
+              {EDGE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  role="radio"
+                  aria-checked={edgeMode === opt.value}
+                  onClick={() => setEdgeMode(opt.value)}
+                  className={`py-2 rounded-md text-sm font-bold ${
+                    edgeMode === opt.value ? 'bg-amber-500 text-white shadow' : 'text-gray-500'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
-            <button
-              onClick={() => setShowCond(!showCond)}
-              className={`flex-none flex items-center gap-0.5 text-[13px] font-bold px-2 py-1 rounded-lg ${
-                Object.keys(errors).some((k) => k !== 'installWidth') ? 'text-red-600' : 'text-amber-600'
-              }`}
-            >
-              条件を{showCond ? '閉じる' : '変更'}
-              <span className="w-4 h-4"><IconChevron up={showCond} /></span>
-            </button>
           </div>
 
-          {showCond && (
+          {!showCond ? (
+            <div className="flex items-stretch gap-2 mt-2">
+              {[
+                ['boardWidth', '床板', boardWidth],
+                ['jointWidth', '目地', jointWidth],
+                ['minBoardWidth', '最低', minBoardWidth]
+              ].map(([key, label, value]) => (
+                <div
+                  key={key}
+                  className={`flex-1 rounded-lg px-1 py-1 text-center ${errors[key] ? 'bg-red-50 ring-1 ring-red-400' : 'bg-gray-50'}`}
+                >
+                  <div className="text-[12px] leading-tight text-gray-500">{label}</div>
+                  <div className="leading-tight">
+                    <b className="text-xl font-extrabold text-gray-900">{value || '–'}</b>
+                    <span className="text-[11px] text-gray-500 ml-0.5">mm</span>
+                  </div>
+                </div>
+              ))}
+              <button
+                onClick={() => setShowCond(true)}
+                className="flex-none flex items-center gap-1.5 rounded-lg border-2 border-amber-500 bg-amber-50 text-amber-700 px-3 text-sm font-bold"
+              >
+                <span className="w-[18px] h-[18px]"><IconSliders /></span>
+                条件を変更
+              </button>
+            </div>
+          ) : (
             <div className="mt-3 pt-3 border-t border-gray-200">
               <div className="grid grid-cols-3 gap-2">
                 {[
@@ -471,29 +501,19 @@ https://lasco.jp/`;
               {['boardWidth', 'jointWidth', 'minBoardWidth'].map((k) =>
                 errors[k] ? <p key={k} className="text-red-600 text-sm mt-1">{errors[k]}</p> : null
               )}
+              <button
+                onClick={() => setShowCond(false)}
+                className="mt-3 w-full flex items-center justify-center gap-1 rounded-lg border-2 border-amber-500 text-amber-700 py-2 text-sm font-bold"
+              >
+                閉じる
+                <span className="w-4 h-4"><IconChevron up /></span>
+              </button>
+            </div>
+          )}
 
-              <div className="text-[13px] font-bold text-gray-600 mt-3 mb-1">端の目地</div>
-              <div className="grid grid-cols-3 bg-gray-100 rounded-lg p-1" role="radiogroup" aria-label="端の目地">
-                {EDGE_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    role="radio"
-                    aria-checked={edgeMode === opt.value}
-                    onClick={() => setEdgeMode(opt.value)}
-                    className={`py-2.5 rounded-md text-sm font-bold ${
-                      edgeMode === opt.value ? 'bg-amber-500 text-white shadow' : 'text-gray-500'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-
-              {chosenActive && (
-                <div className="mt-3 text-[13px] text-amber-800 bg-amber-50 border border-amber-300 rounded-lg px-3 py-1.5">
-                  ⚠ 条件を変えると、採用中の案は解除されます
-                </div>
-              )}
+          {chosenActive && (
+            <div className="mt-2 text-[13px] text-amber-800 bg-amber-50 border border-amber-300 rounded-lg px-3 py-1.5">
+              ⚠ 条件を変えると採用は解除されます
             </div>
           )}
         </div>
