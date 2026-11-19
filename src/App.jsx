@@ -265,7 +265,7 @@ function MemoRow({ value, onSave }) {
         setText(value);
         setEditing(true);
       }}
-      className={`mt-1.5 flex items-center gap-1.5 ${value ? 'text-base font-bold text-gray-800' : 'text-[13.5px] text-gray-400'}`}
+      className={`mt-1 flex items-center gap-1.5 ${value ? 'text-[15px] font-bold text-gray-800' : 'text-[13.5px] text-gray-400'}`}
     >
       <span className="w-4 h-4 text-gray-400"><IconPen /></span>
       {value || 'メモを追加（現場名など）'}
@@ -299,16 +299,17 @@ function HistorySheet({ items, activeId, onClose, onRestore, onDelete, onClearAl
           <h2 className="font-bold text-gray-900 text-xl">採用の履歴</h2>
           <button onClick={onClose} aria-label="閉じる" className="ml-auto w-10 h-10 rounded-lg bg-gray-100 text-gray-500 p-2.5"><IconClose /></button>
         </div>
-        <p className="text-[13px] text-gray-500 mt-1 mb-2 leading-relaxed">タップで、その条件と案を再表示（最近{HISTORY_MAX}件）</p>
+        <p className="text-[13px] text-gray-500 mt-1 mb-1 leading-relaxed">タップで、その条件と案を再表示（最近{HISTORY_MAX}件）</p>
         {items.length === 0 && <p className="text-sm text-gray-400 text-center py-6">まだ履歴はありません</p>}
         {groups.map((g) => (
           <div key={g.label}>
-            <div className="text-sm font-bold text-gray-500 mt-3 mb-1.5 px-1">{g.label}</div>
+            <div className="text-sm font-bold text-gray-500 mt-2.5 mb-1 px-1">{g.label}</div>
             {g.items.map((h) => {
               const r = h.result;
               const j = Number(h.inputs.jointWidth);
               const active = h.id === activeId;
               const differs = ['boardWidth', 'jointWidth', 'minBoardWidth', 'edgeMode'].some((k) => h.inputs[k] !== DEFAULT_CONDITIONS[k]);
+              const tile = '[&_b]:!text-[21px] [&_i]:!text-[13px] [&_i]:!mr-0.5';
               return (
                 <div
                   key={h.id}
@@ -318,13 +319,13 @@ function HistorySheet({ items, activeId, onClose, onRestore, onDelete, onClearAl
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && e.target === e.currentTarget) onRestore(h);
                   }}
-                  className={`rounded-xl border-2 px-3 py-2.5 mb-2 cursor-pointer ${
+                  className={`rounded-xl border-2 px-2.5 py-2 mb-2 cursor-pointer ${
                     active ? 'border-green-500 bg-green-50' : 'border-gray-200 active:bg-amber-50'
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-[13px] font-bold text-gray-500">施工幅</span>
-                    <b className="text-[26px] leading-none font-extrabold text-gray-900">{h.inputs.installWidth}</b>
+                    <b className="text-[22px] leading-none font-extrabold text-gray-900">{h.inputs.installWidth}</b>
                     <span className="text-sm text-gray-500 -ml-1">mm</span>
                     {active && <span className="text-xs font-bold bg-green-600 text-white px-2 py-0.5 rounded-full">採用中</span>}
                     <span className="ml-auto text-sm text-gray-500">{historyTime(h.savedAt)}</span>
@@ -334,34 +335,40 @@ function HistorySheet({ items, activeId, onClose, onRestore, onDelete, onClearAl
                         onDelete(h.id);
                       }}
                       aria-label="この履歴を削除"
-                      className="w-9 h-9 -mr-1.5 text-gray-400 p-2.5"
+                      className="w-8 h-8 -mr-1 text-gray-400 p-2"
                     >
                       <IconClose />
                     </button>
                   </div>
 
-                  <div className="mt-1 flex items-center gap-2 flex-wrap">
+                  <div className="grid grid-cols-2 gap-1.5 mt-1">
+                    <div className="rounded-lg border-2 border-blue-300 bg-blue-50 text-blue-700 px-2 py-1">
+                      <div className="flex items-center gap-1 text-[13px] font-bold"><span className="w-4 h-4"><IconBoard /></span>定尺板</div>
+                      <div className="leading-tight"><WidthCount width={h.inputs.boardWidth} count={r.standardBoards} className={tile} /></div>
+                    </div>
                     {r.adjustedBoards > 0 ? (
-                      <span className="text-orange-700 leading-tight">
-                        <span className="text-[13px] font-bold mr-1.5">カット</span>
-                        <WidthCount width={r.adjustedWidth} count={r.adjustedBoards} className="[&_b]:!text-[24px]" />
-                      </span>
+                      <div className="rounded-lg border-2 border-orange-300 bg-orange-50 text-orange-700 px-2 py-1">
+                        <div className="flex items-center gap-1 text-[13px] font-bold"><span className="w-4 h-4"><IconCut /></span>カット板</div>
+                        <div className="leading-tight"><WidthCount width={r.adjustedWidth} count={r.adjustedBoards} className={tile} /></div>
+                      </div>
                     ) : (
-                      <span className="text-2xl font-extrabold text-green-700">カット不要</span>
-                    )}
-                    {r.jointAdjust !== 0 && (
-                      <span className="text-[13px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
-                        目地 {Math.abs(r.jointAdjust)}か所 → {j + (r.jointAdjust > 0 ? JOINT_EXTRA : -JOINT_EXTRA)}mm
-                      </span>
+                      <div className="rounded-lg border-2 border-green-300 bg-green-50 text-green-700 px-2 py-1">
+                        <div className="flex items-center gap-1 text-[13px] font-bold"><span className="w-4 h-4"><IconCut /></span>カット板</div>
+                        <div className="leading-tight text-[21px] font-extrabold">なし</div>
+                      </div>
                     )}
                   </div>
 
-                  <div className="mt-1 text-sm text-gray-600">
-                    定尺 <b className="text-gray-800">{h.inputs.boardWidth}</b> × <b className="text-gray-800">{r.standardBoards}</b>枚 ・ 計{' '}
-                    <b className="text-gray-800">{r.totalBoards}</b>枚
-                  </div>
+                  {r.jointAdjust !== 0 && (
+                    <div className="mt-1.5 flex items-center gap-2 rounded-lg border-2 border-amber-300 bg-amber-50 text-amber-700 px-2 py-1">
+                      <span className="flex items-center gap-1 text-[13px] font-bold"><span className="w-4 h-4"><IconJoint /></span>目地</span>
+                      <WidthCount width={j + (r.jointAdjust > 0 ? JOINT_EXTRA : -JOINT_EXTRA)} count={Math.abs(r.jointAdjust)} unit="か所" className={tile} />
+                      <span className="ml-auto text-[13px] font-semibold text-amber-900">他は {h.inputs.jointWidth}mm</span>
+                    </div>
+                  )}
+
                   {differs && (
-                    <div className="mt-0.5 text-[13px] text-gray-500">
+                    <div className="mt-1 text-[13px] text-gray-500">
                       床板{h.inputs.boardWidth} ・ 目地{h.inputs.jointWidth} ・ 最低{h.inputs.minBoardWidth} ・ {EDGE_SHORT_LABEL[h.inputs.edgeMode]}
                     </div>
                   )}
