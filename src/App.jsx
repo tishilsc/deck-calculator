@@ -593,7 +593,7 @@ https://lasco.jp/`;
           </div>
 
           {!showCond ? (
-            <div className="flex items-stretch gap-2 mt-2">
+            <div className="flex items-stretch gap-1.5 mt-2">
               {[
                 ['boardWidth', '床板', boardWidth],
                 ['jointWidth', '目地', jointWidth],
@@ -601,20 +601,17 @@ https://lasco.jp/`;
               ].map(([key, label, value]) => (
                 <div
                   key={key}
-                  className={`flex-1 rounded-lg px-1 py-1 text-center ${errors[key] ? 'bg-red-50 ring-1 ring-red-400' : 'bg-gray-50'}`}
+                  className={`flex-1 min-w-0 h-9 rounded-lg px-1 flex items-center justify-center gap-1 ${errors[key] ? 'bg-red-50 ring-1 ring-red-400' : 'bg-gray-50'}`}
                 >
-                  <div className="text-[12px] leading-tight text-gray-500">{label}</div>
-                  <div className="leading-tight">
-                    <b className="text-xl font-extrabold text-gray-900">{value || '–'}</b>
-                    <span className="text-[11px] text-gray-500 ml-0.5">mm</span>
-                  </div>
+                  <span className="text-[12px] text-gray-500 flex-none">{label}</span>
+                  <b className="text-[19px] leading-none font-extrabold text-gray-900">{value || '–'}</b>
                 </div>
               ))}
               <button
                 onClick={() => setShowCond(true)}
-                className="flex-none flex items-center gap-1.5 rounded-lg border-2 border-amber-500 bg-amber-50 text-amber-700 px-3 text-sm font-bold"
+                className="flex-none h-9 flex items-center gap-1 rounded-lg border-2 border-amber-500 bg-amber-50 text-amber-700 px-2.5 text-sm font-bold"
               >
-                <span className="w-[18px] h-[18px]"><IconSliders /></span>
+                <span className="w-[16px] h-[16px]"><IconSliders /></span>
                 条件を変更
               </button>
             </div>
