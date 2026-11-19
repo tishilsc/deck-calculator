@@ -49,6 +49,9 @@ const IconAddHome = () => (
 const IconDots = () => (
   <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" /></svg>
 );
+const IconExternal = () => (
+  <svg {...svgProps} strokeWidth={2.2}><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5" /></svg>
+);
 const IconClose = () => (
   <svg {...svgProps} strokeWidth={2.6}><path d="M6 6l12 12M18 6L6 18" /></svg>
 );
@@ -724,19 +727,18 @@ https://lasco.jp/`;
           </div>
         )}
 
-        <div className="mt-6 text-center pb-4">
-          <a 
-            href="https://lasco.jp/" 
-            target="_blank" 
+        <div className="mt-4 pt-2.5 pb-2 border-t border-amber-200 flex items-center justify-between gap-2">
+          <a
+            href="https://lasco.jp/"
+            target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-amber-600 transition-colors"
+            className="flex items-center gap-2 text-xs text-gray-500 min-w-0"
           >
-            <span>Powered by</span>
-            <span className="font-bold">株式会社ラスコジャパン</span>
+            <span className="flex-none w-6 h-6 rounded-md bg-gradient-to-br from-amber-400 to-orange-500 text-white text-[13px] font-black flex items-center justify-center shadow-sm" aria-hidden="true">L</span>
+            <span className="whitespace-nowrap">Powered by <b className="text-gray-700">株式会社ラスコジャパン</b></span>
+            <span className="flex-none w-3.5 h-3.5 text-gray-400"><IconExternal /></span>
           </a>
-          <div className="text-xs text-gray-400 mt-2">
-            v{version}
-          </div>
+          <span className="flex-none text-[11px] text-gray-400">v{version}</span>
         </div>
       </div>
       {showGuide && <HomeScreenGuide onClose={() => setShowGuide(false)} installPrompt={installPrompt} onInstall={runInstall} />}
