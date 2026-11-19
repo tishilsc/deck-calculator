@@ -14,35 +14,39 @@ export function jointCount(totalBoards, edgeMode) {
 
 const roundStep = (v) => Math.round(v / STEP) * STEP;
 
-export const JOINT_EXTRA = 1; // 目地を広げるときの加算幅(mm)。1か所あたり
+export const JOINT_EXTRA = 1; // 目地を調整するときの1か所あたりの増減幅(mm)
+export const MAX_TWEAK_JOINTS = 10; // 調整する目地の最大箇所数
+export const MIN_JOINT = 3; // 狭める場合の目地幅の下限(mm)
 
 /**
- * 施工幅 W に対する割付案を返す（最大5件）。
- * 調整枚数が少ない順、同数なら調整板の幅が広い順、同じなら目地を広げる箇所が少ない順。
- * 同じ調整枚数は1案のみ。調整板 0 枚（定尺板だけで収まる）の案も含む。
- *
- * maxWidenedJoints > 0 のときは、設定どおりの目地では収まらない（施工幅が少し余る）場合に限り、
- * 目地のうち必要最小限の箇所を JOINT_EXTRA(mm) 広げた案も候補にする。
- * 目地を広げるのは調整板の幅が定尺幅を超えてしまう場合だけで、広げても余りがなくなるまでの最小箇所数。
+ * 全パターンを調べる。目地は基本そのまま(jointAdjust=0)。そのままでは収まらないときに限り、
+ * 必要最小限の箇所の目地を ±JOINT_EXTRA だけ調整した案を作る。
+ * jointAdjust: 正=その数だけ目地を +JOINT_EXTRA(広げる)、負=その数だけ -JOINT_EXTRA(狭める)
  */
-export function calculateBoards({ W, B, J, Bmin, edgeMode = 'both', maxWidenedJoints = 0 }) {
+function enumerate({ W, B, J, Bmin, edgeMode }, maxTweak) {
   const solutions = [];
+  const canNarrow = J - JOINT_EXTRA >= MIN_JOINT;
 
   for (let totalBoards = 1; totalBoards <= MAX_BOARDS; totalBoards++) {
     const jointNum = jointCount(totalBoards, edgeMode);
     const baseJointWidth = jointNum * J;
-    // 定尺板だけでも施工幅を超えるなら、これ以上枚数を増やしても無理
-    if (totalBoards * Bmin + baseJointWidth > W + STEP) break;
-    const kLimit = Math.min(maxWidenedJoints, jointNum);
+    const kLimit = Math.min(maxTweak, jointNum);
+    // 最大限に狭めても定尺板だけで施工幅を超えるなら、これ以上枚数を増やしても無理
+    const narrowest = baseJointWidth - (canNarrow ? kLimit * JOINT_EXTRA : 0);
+    if (totalBoards * Bmin + narrowest > W + STEP) break;
 
     for (let adjustedBoards = 0; adjustedBoards <= totalBoards; adjustedBoards++) {
       const standardBoards = totalBoards - adjustedBoards;
       const rem0 = W - baseJointWidth - standardBoards * B;
 
-      // 広げる箇所数 k を 0 から増やし、最初に条件を満たすものを採用（＝最小箇所数）
-      for (let k = 0; k <= kLimit; k++) {
-        const jointWidth = baseJointWidth + k * JOINT_EXTRA;
-        const remainingWidth = rem0 - k * JOINT_EXTRA;
+      // 調整する箇所数を 0, +1, -1, +2, -2 ... の順に試し、最初に条件を満たすものを採用（＝最小）
+      const order = [0];
+      for (let k = 1; k <= kLimit; k++) {
+        order.push(k);
+        if (canNarrow) order.push(-k);
+      }
+      for (const d of order) {
+        const remainingWidth = rem0 - d * JOINT_EXTRA;
         let adjustedWidth = null;
 
         if (adjustedBoards === 0) {
@@ -55,7 +59,7 @@ export function calculateBoards({ W, B, J, Bmin, edgeMode = 'both', maxWidenedJo
         }
 
         const totalWidth = roundStep(
-          standardBoards * B + adjustedBoards * (adjustedWidth ?? 0) + jointWidth
+          standardBoards * B + adjustedBoards * (adjustedWidth ?? 0) + baseJointWidth + d * JOINT_EXTRA
         );
         solutions.push({
           totalBoards,
@@ -65,28 +69,54 @@ export function calculateBoards({ W, B, J, Bmin, edgeMode = 'both', maxWidenedJo
           widthDiff: adjustedBoards > 0 ? roundStep(B - adjustedWidth) : 0,
           totalWidth,
           gap: roundStep(totalWidth - W), // 丸めによる施工幅とのズレ
-          widenedJoints: k, // 目地を +JOINT_EXTRA にする箇所数（0 なら設定どおり）
+          jointAdjust: d,
         });
         break;
       }
     }
   }
+  return solutions;
+}
 
-  solutions.sort((a, b) => {
-    if (a.adjustedBoards !== b.adjustedBoards) return a.adjustedBoards - b.adjustedBoards;
-    if ((b.adjustedWidth ?? 0) !== (a.adjustedWidth ?? 0)) return (b.adjustedWidth ?? 0) - (a.adjustedWidth ?? 0);
-    return a.widenedJoints - b.widenedJoints;
-  });
+const widthOf = (s) => s.adjustedWidth ?? Infinity; // カット不要は最も良い扱い
+const byQuality = (a, b) =>
+  a.adjustedBoards !== b.adjustedBoards
+    ? a.adjustedBoards - b.adjustedBoards
+    : widthOf(b) !== widthOf(a)
+      ? widthOf(b) - widthOf(a)
+      : Math.abs(a.jointAdjust) - Math.abs(b.jointAdjust);
 
+function onePerAdjusted(list) {
   const seen = new Set();
-  const filtered = [];
-  for (const s of solutions) {
-    if (!seen.has(s.adjustedBoards)) {
-      seen.add(s.adjustedBoards);
-      filtered.push(s);
-    }
-  }
-  return filtered.slice(0, 5);
+  return list.filter((s) => (seen.has(s.adjustedBoards) ? false : seen.add(s.adjustedBoards)));
+}
+
+/**
+ * 施工幅 W に対する割付案（目地は設定どおり）を返す（最大5件）。
+ * 調整枚数が少ない順、同数なら調整板の幅が広い順。同じ調整枚数は1案のみ。
+ * 調整板 0 枚（定尺板だけで収まる）の案も含む。
+ */
+export function calculateBoards(params) {
+  const normal = enumerate(params, 0).sort(byQuality);
+  return onePerAdjusted(normal).slice(0, 5);
+}
+
+/**
+ * 目地を少し調整すれば、設定どおりの案より加工が減る（または加工板が広くなる）案を返す（最大3件）。
+ * 調整するのは必要最小限の箇所数。広げる(+)場合も狭める(-)場合もある。
+ */
+export function calculateTweaks(params) {
+  const all = enumerate(params, MAX_TWEAK_JOINTS);
+  const tweaks = all.filter((s) => s.jointAdjust !== 0);
+  const better = (t, s) =>
+    t.adjustedBoards <= s.adjustedBoards &&
+    widthOf(t) >= widthOf(s) &&
+    Math.abs(t.jointAdjust) <= Math.abs(s.jointAdjust) &&
+    (t.adjustedBoards < s.adjustedBoards ||
+      widthOf(t) > widthOf(s) ||
+      Math.abs(t.jointAdjust) < Math.abs(s.jointAdjust));
+  const useful = tweaks.filter((s) => !all.some((t) => t !== s && better(t, s)));
+  return onePerAdjusted(useful.sort(byQuality)).slice(0, 3);
 }
 
 /** 入力値の検査。問題があればフィールド名 -> メッセージ を返す。 */
