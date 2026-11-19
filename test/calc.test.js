@@ -22,13 +22,13 @@ test('両端目地ありは目地が2か所増える', () => {
   const r = calculateBoards({ ...base, W: 3000, edgeMode: 'both' });
   const s = r[0];
   const joints = (s.totalBoards + 1) * 5;
-  assert.ok(Math.abs(s.standardBoards * 150 + s.adjustedBoards * s.adjustedWidth + joints - 3000) <= 0.5);
+  assert.ok(Math.abs(s.standardBoards * 150 + s.adjustedBoards * s.adjustedWidth + joints - 3000) <= 0.5 * s.adjustedBoards);
 });
 
 test('片側のみは目地数が枚数と同じ', () => {
   const r = calculateBoards({ ...base, W: 3000, edgeMode: 'one' });
   const s = r[0];
-  assert.ok(Math.abs(s.standardBoards * 150 + s.adjustedBoards * s.adjustedWidth + s.totalBoards * 5 - 3000) <= 0.5);
+  assert.ok(Math.abs(s.standardBoards * 150 + s.adjustedBoards * s.adjustedWidth + s.totalBoards * 5 - 3000) <= 0.5 * s.adjustedBoards);
 });
 
 test('幅が広い現場（30枚超）でも案が出る', () => {
@@ -110,4 +110,21 @@ test('調整板の幅が定尺幅と同じ案（実質カットなし）は出�
     const r = [...calculateBoards({ ...base, W, edgeMode: 'both' }), ...calculateTweaks({ ...base, W, edgeMode: 'both' })];
     assert.ok(r.every((s) => s.adjustedBoards === 0 || s.adjustedWidth < 150), `W=${W}`);
   }
+});
+
+test('調整板の幅は1mm刻み', () => {
+  for (const W of [3000, 3123, 4560, 3333]) {
+    for (const s of [...calculateBoards({ ...base, W, edgeMode: 'both' }), ...calculateTweaks({ ...base, W, edgeMode: 'both' })]) {
+      if (s.adjustedWidth != null) assert.equal(s.adjustedWidth, Math.round(s.adjustedWidth), `W=${W}`);
+    }
+  }
+});
+
+test('設定どおりの案よりカット板が狭くなる調整案には narrowerBy が付く', () => {
+  const t = calculateTweaks({ ...base, W: 2033, edgeMode: 'both' });
+  const s = t.find((x) => x.adjustedBoards === 2);
+  assert.ok(s && s.narrowerBy > 0);
+  const z = calculateTweaks({ ...base, W: 3112, edgeMode: 'both' })[0];
+  assert.equal(z.adjustedBoards, 0);
+  assert.equal(z.narrowerBy, 0);
 });

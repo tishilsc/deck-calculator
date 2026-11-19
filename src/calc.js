@@ -1,7 +1,8 @@
 // 床板割付の計算ロジック（画面に依存しない純粋関数）
 
 export const MAX_BOARDS = 1000;
-export const STEP = 0.5; // 幅調整板の丸め単位(mm)
+export const STEP = 1; // 幅調整板の丸め単位(mm)。現場で最後の1枚は実寸を見て加工するため1mm刻み
+const ZERO_TOL = 0.5; // 調整板なし（定尺のみ）とみなす許容差(mm)
 
 // 両端の目地: both=両端にあり / one=片側のみ / none=なし
 export const EDGE_MODES = ['both', 'one', 'none'];
@@ -51,7 +52,7 @@ function enumerate({ W, B, J, Bmin, edgeMode }, maxTweak) {
 
         if (adjustedBoards === 0) {
           // 定尺板のみ: 0.5mm 以内で収まる場合だけ
-          if (Math.abs(remainingWidth) > STEP / 2) continue;
+          if (Math.abs(remainingWidth) > ZERO_TOL) continue;
         } else {
           adjustedWidth = roundStep(remainingWidth / adjustedBoards);
           // 定尺幅と同じなら実質カット不要（調整板 0 枚の案と重複するので除外）
@@ -116,7 +117,16 @@ export function calculateTweaks(params) {
       widthOf(t) > widthOf(s) ||
       Math.abs(t.jointAdjust) < Math.abs(s.jointAdjust));
   const useful = tweaks.filter((s) => !all.some((t) => t !== s && better(t, s)));
-  return onePerAdjusted(useful.sort(byQuality)).slice(0, 3);
+  // 設定どおりの最良案よりカット板の幅が狭くなる場合は、その差(mm)を narrowerBy に入れる（注意表示用）
+  const bestNormal = all.filter((s) => s.jointAdjust === 0).sort(byQuality)[0];
+  const withNote = useful.map((s) => ({
+    ...s,
+    narrowerBy:
+      bestNormal && s.adjustedBoards > 0 && bestNormal.adjustedBoards > 0 && s.adjustedWidth < bestNormal.adjustedWidth
+        ? bestNormal.adjustedWidth - s.adjustedWidth
+        : 0,
+  }));
+  return onePerAdjusted(withNote.sort(byQuality)).slice(0, 3);
 }
 
 /** 入力値の検査。問題があればフィールド名 -> メッセージ を返す。 */
