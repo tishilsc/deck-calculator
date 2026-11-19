@@ -277,7 +277,18 @@ function HomeScreenGuide({ onClose, installPrompt, onInstall }) {
 async function collectOfflineDiagnostics() {
   const rows = [];
   const add = (label, ok, text) => rows.push({ label, ok, text });
-  add('通信', null, navigator.onLine ? 'オンライン' : 'オフライン');
+  // 端末の判定（VPNなどがあると、機内モードでも「オンライン」になる）
+  add('端末の通信状態', null, navigator.onLine ? 'オンライン' : 'オフライン');
+  // 実際にサーバーへ届くか（保存済みの部品に当たらないよう、毎回違うURLで確認する）
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    const res = await fetch(`/favicon.svg?probe=${Date.now()}`, { cache: 'no-store', signal: ctrl.signal });
+    clearTimeout(timer);
+    add('実際に届くか', res.ok, res.ok ? '届く（ネットにつながっています）' : `届かない（${res.status}）`);
+  } catch (e) {
+    add('実際に届くか', false, '届かない（オフライン）');
+  }
   add('開き方', null, isStandalone() ? 'ホーム画面のアプリ' : 'ブラウザ');
   if (!('serviceWorker' in navigator)) {
     add('サービスワーカー', false, 'このブラウザでは使えません');
@@ -610,6 +621,9 @@ https://lasco.jp/`;
                     </span>
                   </div>
                 ))}
+                <div className="mt-1 text-[11px] leading-5 text-gray-400">
+                  「端末の通信状態」は、VPN や広告ブロックのアプリが動いていると、機内モードでも「オンライン」と表示されます。実際につながっているかは「実際に届くか」で分かります。
+                </div>
               </div>
             )}
             <h3 className="font-bold text-gray-800 mb-3">バージョン情報 <span className="ml-1 text-xs font-mono bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">v{version}</span></h3>
