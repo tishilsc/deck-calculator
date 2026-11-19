@@ -1,17 +1,37 @@
 import React, { useState } from 'react';
 import { Calculator, Hammer, AlertCircle, Info } from 'lucide-react';
+import { calculateBoards as calc, validateInputs } from './calc';
+
+const EDGE_OPTIONS = [
+  { value: 'both', label: '両端にあり', note: '壁や枠との間の両側に目地を確保' },
+  { value: 'one', label: '片側のみ', note: '片側だけ壁や枠との間に目地を確保' },
+  { value: 'none', label: 'なし', note: '板どうしの間だけ（端は目地なし）' }
+];
+const EDGE_LABEL = { both: '両端にあり', one: '片側のみ', none: 'なし' };
 
 export default function App() {
   const [installWidth, setInstallWidth] = useState('');
   const [boardWidth, setBoardWidth] = useState('150');
   const [jointWidth, setJointWidth] = useState('5');
   const [minBoardWidth, setMinBoardWidth] = useState('80');
-  const [edgeJoints, setEdgeJoints] = useState(false);
+  const [edgeMode, setEdgeMode] = useState('both');
   const [results, setResults] = useState(null);
   const [showVersionInfo, setShowVersionInfo] = useState(false);
 
-  const version = '2026.02.16';
+  const version = '2026.11.19';
   const updateHistory = [
+    {
+      version: '2026.11.19',
+      changes: [
+        'オフライン対応（一度開けば電波がなくても使えます）',
+        '端の目地を「両端にあり／片側のみ／なし」から選択可能に（初期値は両端にあり）',
+        '最大試行枚数を1000枚に戻し、広い施工幅でも提案が出るように修正',
+        '定尺板だけで収まる場合も提案するように変更',
+        '目地幅0mmを入力できるように修正',
+        '丸めによる施工幅とのズレを表示',
+        '共有テキストに最低床板幅と端の目地を追加'
+      ]
+    },
     {
       version: '2026.02.16',
       changes: [
@@ -37,18 +57,19 @@ export default function App() {
 
   // 初回読み込み時に前回の値を復元
   React.useEffect(() => {
-    const saved = localStorage.getItem('deckCalculatorHistory');
-    if (saved) {
-      try {
+    try {
+      const saved = localStorage.getItem('deckCalculatorHistory');
+      if (saved) {
         const data = JSON.parse(saved);
         if (data.installWidth) setInstallWidth(data.installWidth);
         if (data.boardWidth) setBoardWidth(data.boardWidth);
         if (data.jointWidth) setJointWidth(data.jointWidth);
         if (data.minBoardWidth) setMinBoardWidth(data.minBoardWidth);
-        if (data.edgeJoints !== undefined) setEdgeJoints(data.edgeJoints);
-      } catch (e) {
-        // エラー時は無視
+        if (data.edgeMode) setEdgeMode(data.edgeMode);
+        else if (data.edgeJoints !== undefined) setEdgeMode(data.edgeJoints ? 'both' : 'none');
       }
+    } catch (e) {
+      // エラー時は無視
     }
   }, []);
 
@@ -59,37 +80,18 @@ export default function App() {
       boardWidth,
       jointWidth,
       minBoardWidth,
-      edgeJoints
+      edgeMode
     };
-    localStorage.setItem('deckCalculatorHistory', JSON.stringify(data));
-  }, [installWidth, boardWidth, jointWidth, minBoardWidth, edgeJoints]);
+    try {
+      localStorage.setItem('deckCalculatorHistory', JSON.stringify(data));
+    } catch (e) {
+      // 保存できない環境では無視
+    }
+  }, [installWidth, boardWidth, jointWidth, minBoardWidth, edgeMode]);
 
   // 入力値のリアルタイムバリデーション
   React.useEffect(() => {
-    const newErrors = {};
-    
-    const W = parseFloat(installWidth);
-    const B = parseFloat(boardWidth);
-    const J = parseFloat(jointWidth);
-    const Bmin = parseFloat(minBoardWidth);
-
-    if (installWidth && W <= 0) {
-      newErrors.installWidth = '施工幅は0より大きい値を入力してください';
-    }
-    if (boardWidth && B <= 0) {
-      newErrors.boardWidth = '床板幅は0より大きい値を入力してください';
-    }
-    if (jointWidth && J < 0) {
-      newErrors.jointWidth = '目地幅は0以上の値を入力してください';
-    }
-    if (minBoardWidth && Bmin <= 0) {
-      newErrors.minBoardWidth = '最低床板幅は0より大きい値を入力してください';
-    }
-    if (minBoardWidth && boardWidth && Bmin > B) {
-      newErrors.minBoardWidth = '最低床板幅は床板幅以下にしてください';
-    }
-
-    setErrors(newErrors);
+    setErrors(validateInputs({ installWidth, boardWidth, jointWidth, minBoardWidth }));
   }, [installWidth, boardWidth, jointWidth, minBoardWidth]);
 
   const shareResult = (result) => {
@@ -97,12 +99,17 @@ export default function App() {
 施工幅: ${installWidth}mm
 床板幅: ${boardWidth}mm
 目地幅: ${jointWidth}mm
+最低床板幅: ${minBoardWidth}mm
+端の目地: ${EDGE_LABEL[edgeMode]}
 
 【おすすめ案】
 定尺板: ${result.standardBoards}枚 (${boardWidth}mm)
-幅調整板: ${result.adjustedBoards}枚 (${result.adjustedWidth}mm)
-カット幅: -${result.widthDiff}mm
+${result.adjustedBoards > 0
+  ? `幅調整板: ${result.adjustedBoards}枚 (${result.adjustedWidth}mm)
+カット幅: -${result.widthDiff}mm`
+  : '幅調整板: なし'}
 合計: ${result.totalBoards}枚
+実際の施工幅: ${result.totalWidth}mm${result.gap !== 0 ? `（施工幅との差 ${result.gap > 0 ? '+' : ''}${result.gap}mm）` : ''}
 
 株式会社ラスコジャパン
 https://lasco.jp/`;
@@ -131,7 +138,7 @@ https://lasco.jp/`;
     const J = parseFloat(jointWidth);
     const Bmin = parseFloat(minBoardWidth);
 
-    if (!W || !B || !J || W <= 0 || B <= 0 || J < 0 || Bmin <= 0) {
+    if (!(W > 0) || !(B > 0) || !(J >= 0) || !(Bmin > 0)) {
       alert('正しい数値を入力してください');
       return;
     }
@@ -141,61 +148,7 @@ https://lasco.jp/`;
       return;
     }
 
-    const solutions = [];
-
-    // 最大30枚まで試行
-    for (let totalBoards = 1; totalBoards <= 30; totalBoards++) {
-      for (let adjustedBoards = 0; adjustedBoards <= totalBoards; adjustedBoards++) {
-        const standardBoards = totalBoards - adjustedBoards;
-        
-        if (adjustedBoards === 0) continue;
-
-        // 両端目地の有無で目地の数を調整
-        const totalJoints = edgeJoints ? totalBoards + 1 : totalBoards - 1;
-        const totalJointWidth = totalJoints * J;
-        const availableWidth = W - totalJointWidth;
-        const totalStandardWidth = standardBoards * B;
-        const remainingWidth = availableWidth - totalStandardWidth;
-        const adjustedWidth = remainingWidth / adjustedBoards;
-
-        // 0.5mm単位に丸める
-        const adjustedWidthRounded = Math.round(adjustedWidth * 2) / 2;
-
-        if (adjustedWidthRounded >= Bmin && adjustedWidthRounded <= B) {
-          const widthDiff = B - adjustedWidthRounded;
-          solutions.push({
-            totalBoards,
-            standardBoards,
-            adjustedBoards,
-            adjustedWidth: adjustedWidthRounded,
-            widthDiff: Math.round(widthDiff * 2) / 2,
-            totalWidth: Math.round((standardBoards * B + adjustedBoards * adjustedWidthRounded + totalJointWidth) * 2) / 2
-          });
-        }
-      }
-    }
-
-    // 調整枚数が少ない順、次に調整板の幅が広い順でソート
-    solutions.sort((a, b) => {
-      if (a.adjustedBoards !== b.adjustedBoards) {
-        return a.adjustedBoards - b.adjustedBoards;
-      }
-      // 同じ調整枚数の場合、調整板の幅が広い方を優先
-      return b.adjustedWidth - a.adjustedWidth;
-    });
-
-    // 同じ調整枚数のパターンがある場合、最も幅が広いもののみを残す
-    const filteredSolutions = [];
-    const seenAdjustedBoards = new Set();
-    
-    for (const solution of solutions) {
-      if (!seenAdjustedBoards.has(solution.adjustedBoards)) {
-        filteredSolutions.push(solution);
-        seenAdjustedBoards.add(solution.adjustedBoards);
-      }
-    }
-
-    setResults(filteredSolutions.slice(0, 5));
+    setResults(calc({ W, B, J, Bmin, edgeMode }));
   };
 
   return (
@@ -330,22 +283,28 @@ https://lasco.jp/`;
             </div>
 
             <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={edgeJoints}
-                  onChange={(e) => setEdgeJoints(e.target.checked)}
-                  className="w-5 h-5 rounded border-gray-300 text-amber-500 focus:ring-amber-500 cursor-pointer"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-semibold text-gray-700">
-                    両端にも目地を確保
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    壁や枠との間にも目地幅の隙間を設ける場合はチェック
-                  </div>
-                </div>
-              </label>
+              <div className="text-sm font-semibold text-gray-700 mb-1">端の目地</div>
+              <div className="text-xs text-gray-500 mb-3">
+                壁や枠との間にも目地幅の隙間を設けるかを選びます
+              </div>
+              <div className="space-y-2">
+                {EDGE_OPTIONS.map((opt) => (
+                  <label key={opt.value} className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="edgeMode"
+                      value={opt.value}
+                      checked={edgeMode === opt.value}
+                      onChange={() => setEdgeMode(opt.value)}
+                      className="mt-1 w-5 h-5 border-gray-300 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                    />
+                    <div>
+                      <div className="text-sm font-semibold text-gray-700">{opt.label}</div>
+                      <div className="text-xs text-gray-500">{opt.note}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
             </div>
 
             <button
@@ -419,7 +378,9 @@ https://lasco.jp/`;
                           {result.adjustedBoards}枚
                         </div>
                         <div className="text-sm text-orange-700 mt-1">
-                          {result.adjustedWidth}mm × {result.adjustedBoards}
+                          {result.adjustedBoards > 0
+                            ? `${result.adjustedWidth}mm × ${result.adjustedBoards}`
+                            : 'カット不要'}
                         </div>
                       </div>
                     </div>
@@ -432,13 +393,21 @@ https://lasco.jp/`;
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">カット幅:</span>
                         <span className="font-bold text-orange-600">
-                          -{result.widthDiff}mm
+                          {result.adjustedBoards > 0 ? `-${result.widthDiff}mm` : 'なし'}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">実際の施工幅:</span>
                         <span className="font-bold text-gray-800">{result.totalWidth}mm</span>
                       </div>
+                      {result.gap !== 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">施工幅との差（0.5mm丸め）:</span>
+                          <span className="font-bold text-red-600">
+                            {result.gap > 0 ? '+' : ''}{result.gap}mm
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {index === 0 && (
@@ -469,7 +438,9 @@ https://lasco.jp/`;
             <li>• <strong>床板幅</strong>: 定尺の床板幅（例: 150mm、105mm）</li>
             <li>• <strong>目地幅</strong>: 床板間の隙間（例: 5mm）</li>
             <li>• <strong>最低床板幅</strong>: カット後の最小許容幅</li>
-            <li>• <strong>両端の目地</strong>: 壁や枠との間にも目地が必要な場合はチェック</li>
+            <li>• <strong>端の目地</strong>: 両端にあり／片側のみ／なし から選択</li>
+            <li>• 定尺板だけで収まる場合は「カット不要」の案が先頭に出ます</li>
+            <li>• 一度開けば、電波がなくてもオフラインで使えます</li>
             <li>• 幅調整板は0.5mm単位で計算されます</li>
             <li>• 調整枚数が少なく、幅が広い順に表示されます</li>
           </ul>
