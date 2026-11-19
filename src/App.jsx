@@ -165,7 +165,6 @@ export default function App() {
   const [jointWidth, setJointWidth] = useState('5');
   const [minBoardWidth, setMinBoardWidth] = useState('80');
   const [edgeMode, setEdgeMode] = useState('both');
-  const [allowTweak, setAllowTweak] = useState(true);
   const [results, setResults] = useState(null);
   const [chosen, setChosen] = useState(loadChosen);
   const [showVersionInfo, setShowVersionInfo] = useState(false);
@@ -179,7 +178,7 @@ export default function App() {
         '端の目地を「両端にあり／片側のみ／なし」から選択可能に（初期値は両端にあり）',
         '最大試行枚数を1000枚に戻し、広い施工幅でも提案が出るように修正',
         '定尺板だけで収まる場合も提案するように変更',
-        '目地の微調整案：目地を最小限の箇所だけ±1mmすれば加工が減る場合に、別枠で提案（設定「目地の±1mmを許容する」でオン／オフ）',
+        '目地の調整案：目地を最小限の箇所だけ±1mmすれば加工が減る場合に、別枠で提案',
         '目地幅0mmを入力できるように修正',
         '幅調整板は1mm単位で表示（現場で実寸に合わせて加工するため）',
         '候補を1行で見やすく表示し、使う案を「採用」すると画面下に固定表示',
@@ -222,7 +221,6 @@ export default function App() {
         if (data.minBoardWidth) setMinBoardWidth(data.minBoardWidth);
         if (data.edgeMode) setEdgeMode(data.edgeMode);
         else if (data.edgeJoints !== undefined) setEdgeMode(data.edgeJoints ? 'both' : 'none');
-        if (typeof data.allowTweak === 'boolean') setAllowTweak(data.allowTweak);
       }
     } catch (e) {
       // エラー時は無視
@@ -236,15 +234,14 @@ export default function App() {
       boardWidth,
       jointWidth,
       minBoardWidth,
-      edgeMode,
-      allowTweak
+      edgeMode
     };
     try {
       localStorage.setItem('deckCalculatorHistory', JSON.stringify(data));
     } catch (e) {
       // 保存できない環境では無視
     }
-  }, [installWidth, boardWidth, jointWidth, minBoardWidth, edgeMode, allowTweak]);
+  }, [installWidth, boardWidth, jointWidth, minBoardWidth, edgeMode]);
 
   // 入力値のリアルタイムバリデーション
   React.useEffect(() => {
@@ -307,7 +304,7 @@ https://lasco.jp/`;
     const params = { W, B, J, Bmin, edgeMode };
     const normal = calc(params);
     const best = normal[0];
-    const tweaks = (allowTweak ? calcTweaks(params) : []).map((t) => ({
+    const tweaks = calcTweaks(params).map((t) => ({
       ...t,
       __effect: !best
         ? ''
@@ -510,18 +507,6 @@ https://lasco.jp/`;
               </div>
             </div>
 
-            <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={allowTweak}
-                  onChange={(e) => setAllowTweak(e.target.checked)}
-                  className="w-5 h-5 rounded border-gray-300 text-amber-500 focus:ring-amber-500 cursor-pointer"
-                />
-                <span className="text-sm font-semibold text-gray-700">目地の±{JOINT_EXTRA}mmを許容する</span>
-              </label>
-            </div>
-
             <button
               onClick={calculateBoards}
               disabled={Object.keys(errors).length > 0 || !installWidth}
@@ -608,7 +593,7 @@ https://lasco.jp/`;
             <li>• 定尺板だけで収まる場合は「カット不要」の案が先頭に出ます</li>
             <li>• 一度開けば、電波がなくてもオフラインで使えます</li>
             <li>• <strong>目地の微調整</strong>: 施工幅が少し余るとき、必要最小限の目地を+1mmして加工を減らす案を出します</li>
-            <li>• <strong>目地の±1mmを許容する</strong>: 目地を最小限の箇所だけ±1mmすれば加工が減る案を、別枠で出します</li>
+            <li>• 目地を最小限の箇所だけ±1mmすれば加工が減る案は、「目地を少し調整すると」の枠に別に出します</li>
             <li>• 幅調整板は1mm単位で表示します（最後の1枚は現場で実寸に合わせて加工）</li>
             <li>• 調整枚数が少なく、幅が広い順に表示されます</li>
             <li>• 使う案の「採用」を押すと、画面の下に作業内容が固定表示されます</li>
