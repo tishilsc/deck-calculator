@@ -1,17 +1,368 @@
 import React, { useState } from 'react';
-import { Calculator, Hammer, AlertCircle, Info } from 'lucide-react';
+import { AlertCircle, Info } from 'lucide-react';
+import { calculateBoards as calc, calculateTweaks as calcTweaks, validateInputs, JOINT_EXTRA } from './calc';
+
+const EDGE_OPTIONS = [
+  { value: 'both', label: '両端にあり' },
+  { value: 'one', label: '片側のみ' },
+  { value: 'none', label: 'なし' }
+];
+const EDGE_LABEL = { both: '両端にあり', one: '片側のみ', none: 'なし' };
+
+const svgProps = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
+const IconBoard = () => (
+  <svg {...svgProps}><rect x="3" y="7" width="18" height="10" rx="1.5" /><path d="M7 7v10M12 7v10M17 7v10" opacity=".45" /></svg>
+);
+const IconCut = () => (
+  <svg {...svgProps}><circle cx="6" cy="6" r="2.5" /><circle cx="6" cy="18" r="2.5" /><path d="M8 7.5L20 18M8 16.5L20 6" /></svg>
+);
+const IconJoint = () => (
+  <svg {...svgProps}><path d="M3 6v12M21 6v12" /><path d="M8 12h8M8 12l2.5-2.5M8 12l2.5 2.5M16 12l-2.5-2.5M16 12l-2.5 2.5" /></svg>
+);
+const IconCheck = () => (
+  <svg {...svgProps} strokeWidth={3}><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+);
+const IconShare = () => (
+  <svg {...svgProps} strokeWidth={2.2}><path d="M12 15V3M7.5 7.5L12 3l4.5 4.5M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6" /></svg>
+);
+const IconChevron = ({ up }) => (
+  <svg {...svgProps} strokeWidth={2.6}>{up ? <path d="M6 15l6-6 6 6" /> : <path d="M6 9l6 6 6-6" />}</svg>
+);
+// アプリのロゴ（ホーム画面のアイコンと同じ意匠）
+const AppLogo = () => (
+  <svg viewBox="0 0 64 64" aria-hidden="true">
+    <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#fbbf24" /><stop offset="1" stopColor="#f97316" /></linearGradient></defs>
+    <rect width="64" height="64" rx="14" fill="url(#lg)" />
+    <rect x="11" y="11" width="10" height="32" rx="1.6" fill="#ffffff" />
+    <rect x="23.5" y="11" width="10.0" height="32" rx="1.6" fill="#ffffff" />
+    <rect x="36" y="11" width="10" height="32" rx="1.6" fill="#ffffff" />
+    <rect x="48.5" y="11" width="4.5" height="32" rx="1.6" fill="#7c2d12" />
+    <path d="M11 52H53M11 48.5V55.5M53 48.5V55.5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+  </svg>
+);
+const IconSliders = () => (
+  <svg {...svgProps} strokeWidth={2.4}><path d="M4 7h10M18 7h2M4 17h2M10 17h10" /><circle cx="16" cy="7" r="2" /><circle cx="8" cy="17" r="2" /></svg>
+);
+const IconAddHome = () => (
+  <svg {...svgProps} strokeWidth={2.2}><rect x="4" y="4" width="16" height="16" rx="3.5" /><path d="M12 8.5v7M8.5 12h7" /></svg>
+);
+const IconDots = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" /></svg>
+);
+const IconExternal = () => (
+  <svg {...svgProps} strokeWidth={2.2}><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5" /></svg>
+);
+const IconClose = () => (
+  <svg {...svgProps} strokeWidth={2.6}><path d="M6 6l12 12M18 6L6 18" /></svg>
+);
+
+// 「幅 × 枚数」を大きく表示
+function WidthCount({ width, count, unit = '枚', className = '' }) {
+  return (
+    <span className={`inline-flex items-baseline whitespace-nowrap ${className}`}>
+      <b className="text-[28px] font-extrabold tracking-tight">{width}</b>
+      <i className="not-italic text-[15px] font-bold mr-1 ml-px">mm</i>
+      <em className="not-italic text-base opacity-50 mx-1">×</em>
+      <b className="text-[28px] font-extrabold tracking-tight">{count}</b>
+      <i className="not-italic text-[15px] font-bold ml-px">{unit}</i>
+    </span>
+  );
+}
+
+const sameResult = (a, b) =>
+  !!a && !!b &&
+  a.standardBoards === b.standardBoards &&
+  a.adjustedBoards === b.adjustedBoards &&
+  a.adjustedWidth === b.adjustedWidth &&
+  a.jointAdjust === b.jointAdjust;
+
+// 候補1件を1行で表示
+function ResultRow({ result, label, tweak, boardWidth, jointWidth, chosen, onPick }) {
+  const j = Number(jointWidth);
+  const eff = result.__effect;
+  return (
+    <div
+      className={`flex items-center gap-3 rounded-xl border-2 px-3 py-2 mb-2 ${
+        chosen ? 'border-green-500 bg-green-50 ring-2 ring-green-200' : 'border-gray-200 bg-white'
+      }`}
+    >
+      <div
+        className={`flex-none w-8 h-8 rounded-full flex items-center justify-center text-sm font-extrabold ${
+          chosen ? 'bg-green-600 text-white' : 'bg-amber-100 text-amber-800'
+        }`}
+      >
+        {label}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          {result.adjustedBoards > 0 ? (
+            <span className="text-orange-700 leading-tight">
+              <WidthCount width={result.adjustedWidth} count={result.adjustedBoards} className="[&_b]:!text-[22px]" />
+            </span>
+          ) : (
+            <span className="text-xl font-extrabold text-green-700">カット不要</span>
+          )}
+          {eff && <span className="text-xs font-bold bg-green-100 text-green-800 px-2 py-0.5 rounded-full">{eff}</span>}
+          {result.narrowerBy > 0 && (
+            <span className="text-xs font-bold bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full">
+              ⚠ 幅が{result.narrowerBy}mm狭くなる
+            </span>
+          )}
+        </div>
+        <div className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+          定尺 <b className="text-gray-700">{boardWidth}</b> × <b className="text-gray-700">{result.standardBoards}</b>枚 ・ 計{' '}
+          <b className="text-gray-700">{result.totalBoards}</b>枚
+        </div>
+        {tweak && result.jointAdjust !== 0 && (
+          <div className="mt-1">
+            <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+              目地 {Math.abs(result.jointAdjust)}か所 → {j + (result.jointAdjust > 0 ? JOINT_EXTRA : -JOINT_EXTRA)}mm
+            </span>
+          </div>
+        )}
+      </div>
+      <button
+        onClick={onPick}
+        className={`flex-none text-sm font-bold px-3 py-2 rounded-lg ${
+          chosen ? 'bg-green-600 text-white' : 'border-2 border-gray-300 text-gray-600'
+        }`}
+      >
+        {chosen ? '✓ 採用' : '採用'}
+      </button>
+    </div>
+  );
+}
+
+// 採用した案を画面下に固定表示
+function AdoptBar({ chosen, installWidth, boardWidth, jointWidth, onShare, onClear }) {
+  const r = chosen.result;
+  const j = Number(jointWidth);
+  const tweaked = r.jointAdjust !== 0;
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-10 bg-white border-t-[3px] border-green-600 shadow-[0_-6px_16px_rgba(0,0,0,0.2)]">
+      <div className="max-w-2xl mx-auto px-3 pb-3">
+        <div className="flex items-center gap-2 pt-2 pb-2">
+          <span className="w-[26px] h-[26px] rounded-full bg-green-600 text-white p-1"><IconCheck /></span>
+          <span className="text-sm text-green-800">採用中 <b className="text-base text-green-900">{chosen.name}</b></span>
+          <span className="ml-auto text-[13px] text-gray-600">計{r.totalBoards}枚 ・ {installWidth}mm</span>
+          <button onClick={onShare} aria-label="共有" className="w-9 h-9 rounded-lg bg-green-600 text-white p-2"><IconShare /></button>
+          <button onClick={onClear} aria-label="採用を解除" className="w-9 h-9 rounded-lg bg-gray-100 text-gray-500 p-2"><IconClose /></button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-xl border-2 border-blue-300 bg-blue-50 text-blue-700 px-2.5 py-2">
+            <div className="flex items-center gap-1.5 text-sm font-bold"><span className="w-[22px] h-[22px]"><IconBoard /></span>定尺板</div>
+            <div className="mt-1 leading-tight"><WidthCount width={boardWidth} count={r.standardBoards} /></div>
+          </div>
+          {r.adjustedBoards > 0 ? (
+            <div className="rounded-xl border-2 border-orange-300 bg-orange-50 text-orange-700 px-2.5 py-2">
+              <div className="flex items-center gap-1.5 text-sm font-bold"><span className="w-[22px] h-[22px]"><IconCut /></span>カット板</div>
+              <div className="mt-1 leading-tight"><WidthCount width={r.adjustedWidth} count={r.adjustedBoards} /></div>
+            </div>
+          ) : (
+            <div className="rounded-xl border-2 border-green-300 bg-green-50 text-green-700 px-2.5 py-2">
+              <div className="flex items-center gap-1.5 text-sm font-bold"><span className="w-[22px] h-[22px]"><IconCut /></span>カット板</div>
+              <div className="mt-1 leading-tight text-[28px] font-extrabold">なし</div>
+            </div>
+          )}
+        </div>
+        {tweaked && (
+          <div className="mt-2 flex items-center gap-2 rounded-xl border-2 border-amber-300 bg-amber-50 text-amber-700 px-2.5 py-1.5">
+            <span className="flex items-center gap-1.5 text-sm font-bold"><span className="w-[22px] h-[22px]"><IconJoint /></span>目地</span>
+            <WidthCount width={j + (r.jointAdjust > 0 ? JOINT_EXTRA : -JOINT_EXTRA)} count={Math.abs(r.jointAdjust)} unit="か所" />
+            <span className="ml-auto text-sm font-semibold text-amber-900">他は {jointWidth}mm</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ホーム画面に追加する方法の案内（iPhone / Android）
+const isStandalone = () => {
+  try {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  } catch (e) {
+    return false;
+  }
+};
+const detectPlatform = () => {
+  const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+  if (/android/i.test(ua)) return 'android';
+  if (/iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1)) return 'ios';
+  return 'ios';
+};
+
+function Step({ n, children }) {
+  return (
+    <li className="flex gap-3 items-start">
+      <span className="flex-none w-7 h-7 rounded-full bg-amber-500 text-white text-sm font-extrabold flex items-center justify-center">{n}</span>
+      <div className="text-[15px] leading-7 text-gray-800">{children}</div>
+    </li>
+  );
+}
+
+function HomeScreenGuide({ onClose, installPrompt, onInstall }) {
+  const [tab, setTab] = useState(detectPlatform);
+  return (
+    <div className="fixed inset-0 z-20 bg-black/40 flex items-end" onClick={onClose}>
+      <div
+        className="w-full max-w-2xl mx-auto bg-white rounded-t-2xl p-4 pb-6 max-h-[90vh] overflow-y-auto"
+        role="dialog"
+        aria-label="ホーム画面に追加する方法"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <span className="w-9 h-9 flex-none"><AppLogo /></span>
+          <h2 className="font-bold text-gray-900 text-lg">ホーム画面に追加</h2>
+          <button onClick={onClose} aria-label="閉じる" className="ml-auto w-9 h-9 rounded-lg bg-gray-100 text-gray-500 p-2"><IconClose /></button>
+        </div>
+        <p className="text-[13px] text-gray-500 mb-3">アプリのように1タップで開けます。一度開いておけば、電波がなくても使えます。</p>
+
+        <div className="grid grid-cols-2 bg-gray-100 rounded-lg p-1 mb-4" role="tablist">
+          {[['ios', 'iPhone'], ['android', 'Android']].map(([k, label]) => (
+            <button
+              key={k}
+              role="tab"
+              aria-selected={tab === k}
+              onClick={() => setTab(k)}
+              className={`py-2.5 rounded-md text-sm font-bold ${tab === k ? 'bg-white text-amber-700 shadow' : 'text-gray-500'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'ios' ? (
+          <ol className="space-y-3">
+            <Step n={1}>
+              画面の下（または上）の <b>共有ボタン</b>
+              <span className="inline-block align-middle w-5 h-5 mx-1 text-blue-600"><IconShare /></span>
+              をタップ
+            </Step>
+            <Step n={2}>メニューを下にスクロールして <b>「ホーム画面に追加」</b> をタップ</Step>
+            <Step n={3}>右上の <b>「追加」</b> をタップ</Step>
+            <li className="text-[13px] text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+              LINE・メールなどの中で開いている場合は、右下や右上のメニューから <b>「Safariで開く」</b> を選んでから行ってください。
+            </li>
+          </ol>
+        ) : (
+          <ol className="space-y-3">
+            {installPrompt && (
+              <li>
+                <button
+                  onClick={onInstall}
+                  className="w-full flex items-center justify-center gap-2 bg-amber-500 text-white font-bold rounded-xl py-3 text-base"
+                >
+                  <span className="w-5 h-5"><IconAddHome /></span>
+                  ホーム画面に追加する
+                </button>
+                <div className="text-[13px] text-gray-500 mt-1 text-center">ボタンで追加できない場合は、下の手順で行ってください</div>
+              </li>
+            )}
+            <Step n={1}>
+              Chromeの右上の <b>メニュー</b>
+              <span className="inline-block align-middle w-5 h-5 mx-1 text-gray-700"><IconDots /></span>
+              をタップ
+            </Step>
+            <Step n={2}><b>「ホーム画面に追加」</b>（または <b>「アプリをインストール」</b>）をタップ</Step>
+            <Step n={3}>確認の画面で <b>「追加」</b>（または「インストール」）をタップ</Step>
+          </ol>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const CHOSEN_KEY = 'deckCalculatorChosen';
+function loadChosen() {
+  try {
+    return JSON.parse(localStorage.getItem(CHOSEN_KEY)) || null;
+  } catch (e) {
+    return null;
+  }
+}
 
 export default function App() {
   const [installWidth, setInstallWidth] = useState('');
   const [boardWidth, setBoardWidth] = useState('150');
   const [jointWidth, setJointWidth] = useState('5');
   const [minBoardWidth, setMinBoardWidth] = useState('80');
-  const [edgeJoints, setEdgeJoints] = useState(false);
+  const [edgeMode, setEdgeMode] = useState('both');
   const [results, setResults] = useState(null);
+  const [chosen, setChosen] = useState(loadChosen);
   const [showVersionInfo, setShowVersionInfo] = useState(false);
+  const [showCond, setShowCond] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [offlineReady, setOfflineReady] = useState(() => {
+    try {
+      return !!(navigator.serviceWorker && navigator.serviceWorker.controller) || localStorage.getItem('deckOfflineReady') === '1';
+    } catch (e) {
+      return false;
+    }
+  });
+  const [offlineToast, setOfflineToast] = useState(false);
 
-  const version = '2026.02.16';
+  // オフライン用の保存が終わったときに、一度だけ知らせる
+  React.useEffect(() => {
+    const onReady = () => {
+      setOfflineReady(true);
+      setOfflineToast(true);
+      setTimeout(() => setOfflineToast(false), 5000);
+    };
+    window.addEventListener('deck-offline-ready', onReady);
+    return () => window.removeEventListener('deck-offline-ready', onReady);
+  }, []);
+  const [installed, setInstalled] = useState(isStandalone);
+  const [installPrompt, setInstallPrompt] = useState(null);
+
+  // Androidのブラウザがワンタップ追加に対応している場合は、そのボタンも出す
+  React.useEffect(() => {
+    const onPrompt = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    const onInstalled = () => {
+      setInstalled(true);
+      setShowGuide(false);
+    };
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onPrompt);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, []);
+
+  const runInstall = async () => {
+    if (!installPrompt) return;
+    try {
+      installPrompt.prompt();
+      await installPrompt.userChoice;
+    } catch (e) {
+      // 取り消しなどは無視
+    }
+    setInstallPrompt(null);
+  };
+
+  const version = '2026.11.19';
   const updateHistory = [
+    {
+      version: '2026.11.19',
+      changes: [
+        'オフライン対応（一度開けば電波がなくても使えます。使えるようになると画面上に表示します）',
+        '入力欄を刷新（施工幅を大きく・入力すると自動で計算・条件は折りたたみ）',
+        'アイコンを刷新（ホーム画面用のアイコンも追加）',
+        '「ホーム画面に追加」の案内を追加（iPhone／Android）',
+        '端の目地を「両端にあり／片側のみ／なし」から選択可能に（初期値は両端にあり）',
+        '最大試行枚数を1000枚に戻し、広い施工幅でも提案が出るように修正',
+        '定尺板だけで収まる場合も提案するように変更',
+        '目地の調整案：目地を最小限の箇所だけ±1mmすれば加工が減る場合に、別枠で提案',
+        '目地幅0mmを入力できるように修正',
+        '候補を1行で見やすく表示し、使う案を「採用」すると画面下に固定表示',
+        '目地調整でカット板の幅が狭くなる案には注意表示',
+        '共有テキストに最低床板幅と端の目地を追加'
+      ]
+    },
     {
       version: '2026.02.16',
       changes: [
@@ -37,18 +388,19 @@ export default function App() {
 
   // 初回読み込み時に前回の値を復元
   React.useEffect(() => {
-    const saved = localStorage.getItem('deckCalculatorHistory');
-    if (saved) {
-      try {
+    try {
+      const saved = localStorage.getItem('deckCalculatorHistory');
+      if (saved) {
         const data = JSON.parse(saved);
         if (data.installWidth) setInstallWidth(data.installWidth);
         if (data.boardWidth) setBoardWidth(data.boardWidth);
         if (data.jointWidth) setJointWidth(data.jointWidth);
         if (data.minBoardWidth) setMinBoardWidth(data.minBoardWidth);
-        if (data.edgeJoints !== undefined) setEdgeJoints(data.edgeJoints);
-      } catch (e) {
-        // エラー時は無視
+        if (data.edgeMode) setEdgeMode(data.edgeMode);
+        else if (data.edgeJoints !== undefined) setEdgeMode(data.edgeJoints ? 'both' : 'none');
       }
+    } catch (e) {
+      // エラー時は無視
     }
   }, []);
 
@@ -59,50 +411,42 @@ export default function App() {
       boardWidth,
       jointWidth,
       minBoardWidth,
-      edgeJoints
+      edgeMode
     };
-    localStorage.setItem('deckCalculatorHistory', JSON.stringify(data));
-  }, [installWidth, boardWidth, jointWidth, minBoardWidth, edgeJoints]);
+    try {
+      localStorage.setItem('deckCalculatorHistory', JSON.stringify(data));
+    } catch (e) {
+      // 保存できない環境では無視
+    }
+  }, [installWidth, boardWidth, jointWidth, minBoardWidth, edgeMode]);
 
   // 入力値のリアルタイムバリデーション
   React.useEffect(() => {
-    const newErrors = {};
-    
-    const W = parseFloat(installWidth);
-    const B = parseFloat(boardWidth);
-    const J = parseFloat(jointWidth);
-    const Bmin = parseFloat(minBoardWidth);
-
-    if (installWidth && W <= 0) {
-      newErrors.installWidth = '施工幅は0より大きい値を入力してください';
-    }
-    if (boardWidth && B <= 0) {
-      newErrors.boardWidth = '床板幅は0より大きい値を入力してください';
-    }
-    if (jointWidth && J < 0) {
-      newErrors.jointWidth = '目地幅は0以上の値を入力してください';
-    }
-    if (minBoardWidth && Bmin <= 0) {
-      newErrors.minBoardWidth = '最低床板幅は0より大きい値を入力してください';
-    }
-    if (minBoardWidth && boardWidth && Bmin > B) {
-      newErrors.minBoardWidth = '最低床板幅は床板幅以下にしてください';
-    }
-
-    setErrors(newErrors);
+    setErrors(validateInputs({ installWidth, boardWidth, jointWidth, minBoardWidth }));
   }, [installWidth, boardWidth, jointWidth, minBoardWidth]);
+
+  const jointAdjustText = (r) => {
+    const n = Math.abs(r.jointAdjust);
+    const w = Number(jointWidth) + (r.jointAdjust > 0 ? JOINT_EXTRA : -JOINT_EXTRA);
+    return `${n}か所を${w}mmに（他は${jointWidth}mm）`;
+  };
 
   const shareResult = (result) => {
     const text = `【ウッドデッキ床板計算結果】
 施工幅: ${installWidth}mm
 床板幅: ${boardWidth}mm
 目地幅: ${jointWidth}mm
+最低床板幅: ${minBoardWidth}mm
+端の目地: ${EDGE_LABEL[edgeMode]}
 
-【おすすめ案】
+【採用案】
 定尺板: ${result.standardBoards}枚 (${boardWidth}mm)
-幅調整板: ${result.adjustedBoards}枚 (${result.adjustedWidth}mm)
-カット幅: -${result.widthDiff}mm
+${result.adjustedBoards > 0
+  ? `幅調整板: ${result.adjustedBoards}枚 (${result.adjustedWidth}mm)
+カット幅: -${result.widthDiff}mm`
+  : '幅調整板: なし'}
 合計: ${result.totalBoards}枚
+${result.jointAdjust !== 0 ? `目地: ${jointAdjustText(result)}` : ''}
 
 株式会社ラスコジャパン
 https://lasco.jp/`;
@@ -125,247 +469,234 @@ https://lasco.jp/`;
     }
   };
 
-  const calculateBoards = () => {
+  const currentSig = [installWidth, boardWidth, jointWidth, minBoardWidth, edgeMode].join('|');
+  const chosenActive = chosen && chosen.sig === currentSig ? chosen : null;
+
+  const computeResults = () => {
     const W = parseFloat(installWidth);
     const B = parseFloat(boardWidth);
     const J = parseFloat(jointWidth);
     const Bmin = parseFloat(minBoardWidth);
+    if (!(W > 0) || !(B > 0) || !(J >= 0) || !(Bmin > 0) || Bmin > B) return null;
+    const params = { W, B, J, Bmin, edgeMode };
+    const normal = calc(params);
+    const best = normal[0];
+    const tweaks = calcTweaks(params).map((t) => ({
+      ...t,
+      __effect: !best
+        ? ''
+        : t.adjustedBoards === 0
+          ? `カット ${best.adjustedBoards}枚 → 0枚`
+          : t.adjustedBoards < best.adjustedBoards
+            ? `カット ${best.adjustedBoards - t.adjustedBoards}枚減`
+            : ''
+    }));
+    return { normal, tweaks };
+  };
 
-    if (!W || !B || !J || W <= 0 || B <= 0 || J < 0 || Bmin <= 0) {
-      alert('正しい数値を入力してください');
-      return;
+  // 入力が変わったら自動で計算する（入力途中のちらつきを避けるため、少し待ってから）
+  React.useEffect(() => {
+    const noErrors = Object.keys(errors).length === 0;
+    const ready = noErrors && parseFloat(installWidth) > 0 && parseFloat(boardWidth) > 0 && parseFloat(minBoardWidth) > 0 && parseFloat(jointWidth) >= 0;
+    if (!ready) {
+      setResults(null);
+      return undefined;
     }
+    const timer = setTimeout(() => setResults(computeResults()), results === null ? 0 : 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [installWidth, boardWidth, jointWidth, minBoardWidth, edgeMode, errors]);
 
-    if (Bmin > B) {
-      alert('最低床板幅が通常の板幅より大きくなっています');
-      return;
+  // 採用案を保存
+  React.useEffect(() => {
+    try {
+      if (chosen) localStorage.setItem(CHOSEN_KEY, JSON.stringify(chosen));
+      else localStorage.removeItem(CHOSEN_KEY);
+    } catch (e) {
+      // 保存できない環境では無視
     }
+  }, [chosen]);
 
-    const solutions = [];
-
-    // 最大30枚まで試行
-    for (let totalBoards = 1; totalBoards <= 30; totalBoards++) {
-      for (let adjustedBoards = 0; adjustedBoards <= totalBoards; adjustedBoards++) {
-        const standardBoards = totalBoards - adjustedBoards;
-        
-        if (adjustedBoards === 0) continue;
-
-        // 両端目地の有無で目地の数を調整
-        const totalJoints = edgeJoints ? totalBoards + 1 : totalBoards - 1;
-        const totalJointWidth = totalJoints * J;
-        const availableWidth = W - totalJointWidth;
-        const totalStandardWidth = standardBoards * B;
-        const remainingWidth = availableWidth - totalStandardWidth;
-        const adjustedWidth = remainingWidth / adjustedBoards;
-
-        // 0.5mm単位に丸める
-        const adjustedWidthRounded = Math.round(adjustedWidth * 2) / 2;
-
-        if (adjustedWidthRounded >= Bmin && adjustedWidthRounded <= B) {
-          const widthDiff = B - adjustedWidthRounded;
-          solutions.push({
-            totalBoards,
-            standardBoards,
-            adjustedBoards,
-            adjustedWidth: adjustedWidthRounded,
-            widthDiff: Math.round(widthDiff * 2) / 2,
-            totalWidth: Math.round((standardBoards * B + adjustedBoards * adjustedWidthRounded + totalJointWidth) * 2) / 2
-          });
-        }
-      }
-    }
-
-    // 調整枚数が少ない順、次に調整板の幅が広い順でソート
-    solutions.sort((a, b) => {
-      if (a.adjustedBoards !== b.adjustedBoards) {
-        return a.adjustedBoards - b.adjustedBoards;
-      }
-      // 同じ調整枚数の場合、調整板の幅が広い方を優先
-      return b.adjustedWidth - a.adjustedWidth;
-    });
-
-    // 同じ調整枚数のパターンがある場合、最も幅が広いもののみを残す
-    const filteredSolutions = [];
-    const seenAdjustedBoards = new Set();
-    
-    for (const solution of solutions) {
-      if (!seenAdjustedBoards.has(solution.adjustedBoards)) {
-        filteredSolutions.push(solution);
-        seenAdjustedBoards.add(solution.adjustedBoards);
-      }
-    }
-
-    setResults(filteredSolutions.slice(0, 5));
+  const pick = (result, name) => {
+    if (chosenActive && sameResult(chosenActive.result, result)) setChosen(null);
+    else setChosen({ sig: currentSig, name, result });
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 p-4">
+    <div className={`min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 px-3 pt-1.5 pb-4 ${chosenActive ? 'pb-80' : ''}`}>
       <div className="max-w-2xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="bg-amber-500 p-3 rounded-xl">
-              <Hammer className="w-6 h-6 text-white" />
-            </div>
-            <div className="flex-1">
-              <h1 className="text-2xl font-bold text-gray-800">ウッドデッキ床板計算ツール</h1>
-            </div>
+        <div className="flex items-center gap-2 px-1 pb-1.5">
+          <div className="w-7 h-7 flex-none"><AppLogo /></div>
+          <h1 className="text-base font-bold text-gray-800 whitespace-nowrap">床板計算</h1>
+          {!installed && (
             <button
-              onClick={() => setShowVersionInfo(!showVersionInfo)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              title="バージョン情報"
+              onClick={() => setShowGuide(true)}
+              className="ml-auto flex items-center gap-1 whitespace-nowrap rounded-lg border border-gray-300 bg-white/70 text-gray-600 text-xs font-bold px-2 py-1"
             >
-              <Info className="w-5 h-5 text-gray-600" />
+              <span className="w-4 h-4"><IconAddHome /></span>
+              ホーム画面に追加
             </button>
+          )}
+          <button
+            onClick={() => setShowVersionInfo(!showVersionInfo)}
+            className={`${installed ? 'ml-auto ' : ''}p-1.5 rounded-lg text-gray-500`}
+            aria-label="バージョン情報"
+          >
+            <Info className="w-5 h-5" />
+          </button>
+        </div>
+
+        {showVersionInfo && (
+          <div className="mb-3 bg-white rounded-xl p-4 border-2 border-gray-200">
+            <div className={`mb-3 text-sm font-bold rounded-lg px-3 py-2 ${offlineReady ? 'bg-green-50 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+              {offlineReady
+                ? '✓ オフライン対応済み（電波がなくても開けます）'
+                : 'オフライン用の準備中、または未対応です。電波のある所で、一度このまま開いたままお待ちください。'}
+            </div>
+            <h3 className="font-bold text-gray-800 mb-3">バージョン情報 <span className="ml-1 text-xs font-mono bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">v{version}</span></h3>
+            <div className="space-y-4 max-h-64 overflow-y-auto">
+              {updateHistory.map((update, index) => (
+                <div key={index} className="border-l-4 border-amber-500 pl-3">
+                  <div className="text-sm font-semibold text-gray-700 mb-1">{update.version}</div>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    {update.changes.map((change, changeIndex) => (
+                      <li key={changeIndex}>• {change}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="bg-white rounded-2xl shadow p-3 mb-3">
+          <div className={`flex items-center gap-2 rounded-xl border-2 px-3 py-1 bg-amber-50 ${errors.installWidth ? 'border-red-500' : 'border-amber-400'}`}>
+            <label htmlFor="installWidth" className="text-sm font-bold text-amber-800 flex-none">施工幅</label>
+            <input
+              id="installWidth"
+              type="number"
+              inputMode="decimal"
+              value={installWidth}
+              onChange={(e) => setInstallWidth(e.target.value)}
+              onFocus={(e) => e.target.select()}
+              className="min-w-0 flex-1 bg-transparent text-right text-[38px] leading-tight font-extrabold text-gray-900 placeholder-gray-300 focus:outline-none"
+              placeholder="3000"
+            />
+            <span className="text-base font-bold text-gray-500 flex-none">mm</span>
+            {installWidth && (
+              <button
+                onClick={() => setInstallWidth('')}
+                aria-label="施工幅を消す"
+                className="flex-none w-6 h-6 rounded-full bg-gray-200 text-gray-500 p-1"
+              >
+                <IconClose />
+              </button>
+            )}
+          </div>
+          {errors.installWidth && <p className="text-red-600 text-sm mt-1">{errors.installWidth}</p>}
+
+          {/* 端の目地: よく変えるので折りたたみの外に常時表示 */}
+          <div className="flex items-center gap-2 mt-2">
+            <span className="flex-none text-[13px] font-bold text-gray-600">端の目地</span>
+            <div className="flex-1 grid grid-cols-3 bg-gray-100 rounded-lg p-0.5" role="radiogroup" aria-label="端の目地">
+              {EDGE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  role="radio"
+                  aria-checked={edgeMode === opt.value}
+                  onClick={() => setEdgeMode(opt.value)}
+                  className={`py-2 rounded-md text-sm font-bold ${
+                    edgeMode === opt.value ? 'bg-amber-500 text-white shadow' : 'text-gray-500'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {showVersionInfo && (
-            <div className="mb-6 bg-gray-50 rounded-xl p-4 border-2 border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold text-gray-800">バージョン情報</h3>
-                <span className="text-sm font-mono bg-amber-100 text-amber-800 px-3 py-1 rounded-full">
-                  v{version}
-                </span>
-              </div>
-              
-              <div className="space-y-4 max-h-64 overflow-y-auto">
-                {updateHistory.map((update, index) => (
-                  <div key={index} className="border-l-4 border-amber-500 pl-3">
-                    <div className="text-sm font-semibold text-gray-700 mb-1">
-                      {update.version}
+          {!showCond ? (
+            <div className="flex items-stretch gap-1.5 mt-2">
+              {[
+                ['boardWidth', '床板', boardWidth],
+                ['jointWidth', '目地', jointWidth],
+                ['minBoardWidth', '最低', minBoardWidth]
+              ].map(([key, label, value]) => (
+                <div
+                  key={key}
+                  className={`flex-1 min-w-0 h-9 rounded-lg px-1 flex items-center justify-center gap-1 ${errors[key] ? 'bg-red-50 ring-1 ring-red-400' : 'bg-gray-50'}`}
+                >
+                  <span className="text-[12px] text-gray-500 flex-none">{label}</span>
+                  <b className="text-[19px] leading-none font-extrabold text-gray-900">{value || '–'}</b>
+                </div>
+              ))}
+              <button
+                onClick={() => setShowCond(true)}
+                className="flex-none h-9 flex items-center gap-1 rounded-lg border-2 border-amber-500 bg-amber-50 text-amber-700 px-2.5 text-sm font-bold"
+              >
+                <span className="w-[16px] h-[16px]"><IconSliders /></span>
+                条件を変更
+              </button>
+            </div>
+          ) : (
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  ['boardWidth', '床板幅', boardWidth, setBoardWidth, '150'],
+                  ['jointWidth', '目地幅', jointWidth, setJointWidth, '5'],
+                  ['minBoardWidth', '最低床板幅', minBoardWidth, setMinBoardWidth, '80']
+                ].map(([key, label, value, setter, ph]) => (
+                  <div key={key}>
+                    <label htmlFor={key} className="block text-[13px] font-bold text-gray-600 mb-1">{label}</label>
+                    <div className={`flex items-baseline justify-center gap-1 rounded-lg border-2 px-1 py-1.5 ${errors[key] ? 'border-red-500' : 'border-gray-200'}`}>
+                      <input
+                        id={key}
+                        type="number"
+                        inputMode="decimal"
+                        value={value}
+                        onChange={(e) => setter(e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                        className="w-full min-w-0 text-center text-[22px] font-bold text-gray-900 bg-transparent focus:outline-none"
+                        placeholder={ph}
+                      />
+                      <span className="text-xs text-gray-500">mm</span>
                     </div>
-                    <ul className="text-sm text-gray-600 space-y-1">
-                      {update.changes.map((change, changeIndex) => (
-                        <li key={changeIndex}>• {change}</li>
-                      ))}
-                    </ul>
                   </div>
                 ))}
               </div>
+              {['boardWidth', 'jointWidth', 'minBoardWidth'].map((k) =>
+                errors[k] ? <p key={k} className="text-red-600 text-sm mt-1">{errors[k]}</p> : null
+              )}
+              <button
+                onClick={() => setShowCond(false)}
+                className="mt-3 w-full flex items-center justify-center gap-1 rounded-lg border-2 border-amber-500 text-amber-700 py-2 text-sm font-bold"
+              >
+                閉じる
+                <span className="w-4 h-4"><IconChevron up /></span>
+              </button>
             </div>
           )}
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                施工幅（mm）
-              </label>
-              <input
-                type="number"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={installWidth}
-                onChange={(e) => setInstallWidth(e.target.value)}
-                onFocus={(e) => e.target.select()}
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none text-lg ${
-                  errors.installWidth ? 'border-red-500' : 'border-gray-200 focus:border-amber-500'
-                }`}
-                placeholder="3000"
-              />
-              {errors.installWidth && (
-                <p className="text-red-600 text-sm mt-1">{errors.installWidth}</p>
-              )}
+          {chosenActive && (
+            <div className="mt-2 text-[13px] text-amber-800 bg-amber-50 border border-amber-300 rounded-lg px-3 py-1.5">
+              ⚠ 条件を変えると採用は解除されます
             </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                床板幅（mm）
-              </label>
-              <input
-                type="number"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={boardWidth}
-                onChange={(e) => setBoardWidth(e.target.value)}
-                onFocus={(e) => e.target.select()}
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none text-lg ${
-                  errors.boardWidth ? 'border-red-500' : 'border-gray-200 focus:border-amber-500'
-                }`}
-                placeholder="150"
-              />
-              {errors.boardWidth && (
-                <p className="text-red-600 text-sm mt-1">{errors.boardWidth}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                目地幅（mm）
-              </label>
-              <input
-                type="number"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={jointWidth}
-                onChange={(e) => setJointWidth(e.target.value)}
-                onFocus={(e) => e.target.select()}
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none text-lg ${
-                  errors.jointWidth ? 'border-red-500' : 'border-gray-200 focus:border-amber-500'
-                }`}
-                placeholder="5"
-              />
-              {errors.jointWidth && (
-                <p className="text-red-600 text-sm mt-1">{errors.jointWidth}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                最低床板幅（mm）
-              </label>
-              <input
-                type="number"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={minBoardWidth}
-                onChange={(e) => setMinBoardWidth(e.target.value)}
-                onFocus={(e) => e.target.select()}
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none text-lg ${
-                  errors.minBoardWidth ? 'border-red-500' : 'border-gray-200 focus:border-amber-500'
-                }`}
-                placeholder="80"
-              />
-              {errors.minBoardWidth && (
-                <p className="text-red-600 text-sm mt-1">{errors.minBoardWidth}</p>
-              )}
-            </div>
-
-            <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={edgeJoints}
-                  onChange={(e) => setEdgeJoints(e.target.checked)}
-                  className="w-5 h-5 rounded border-gray-300 text-amber-500 focus:ring-amber-500 cursor-pointer"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-semibold text-gray-700">
-                    両端にも目地を確保
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    壁や枠との間にも目地幅の隙間を設ける場合はチェック
-                  </div>
-                </div>
-              </label>
-            </div>
-
-            <button
-              onClick={calculateBoards}
-              disabled={Object.keys(errors).length > 0 || !installWidth}
-              className={`w-full font-bold py-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-lg shadow-lg ${
-                Object.keys(errors).length > 0 || !installWidth
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-amber-500 hover:bg-amber-600 text-white'
-              }`}
-            >
-              <Calculator className="w-5 h-5" />
-              計算する
-            </button>
-          </div>
+          )}
         </div>
 
+        {!results && !installWidth && (
+          <div className="text-center px-5 py-10 text-gray-500">
+            <div className="text-base font-bold text-gray-700 mb-2">施工幅を入力してください</div>
+            <div className="text-[13px] leading-7">
+              入力すると、すぐに候補が出ます。<br />
+              使う案は「採用」で画面下に固定できます。
+            </div>
+          </div>
+        )}
+
         {results && (
-          <div className="space-y-4">
-            {results.length === 0 ? (
+          <div>
+            {results.normal.length === 0 && results.tweaks.length === 0 ? (
               <div className="bg-red-50 border-2 border-red-200 rounded-xl p-6">
                 <div className="flex items-start gap-3">
                   <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-1" />
@@ -379,117 +710,77 @@ https://lasco.jp/`;
               </div>
             ) : (
               <>
-                <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
-                  <p className="text-green-800 font-semibold text-center">
-                    {results.length}件の提案が見つかりました
-                  </p>
-                </div>
-
-                {results.map((result, index) => (
-                  <div
-                    key={index}
-                    className={`bg-white rounded-xl shadow-lg p-6 border-2 ${
-                      index === 0 ? 'border-amber-400' : 'border-gray-200'
-                    }`}
-                  >
-                    {index === 0 && (
-                      <div className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full inline-block mb-3">
-                        おすすめ
-                      </div>
-                    )}
-                    
-                    <div className="text-2xl font-bold text-gray-800 mb-4">
-                      案{index + 1}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div className="bg-blue-50 p-4 rounded-lg">
-                        <div className="text-sm text-blue-600 font-semibold mb-1">定尺板</div>
-                        <div className="text-2xl font-bold text-blue-900">
-                          {result.standardBoards}枚
-                        </div>
-                        <div className="text-sm text-blue-700 mt-1">
-                          {boardWidth}mm × {result.standardBoards}
-                        </div>
-                      </div>
-
-                      <div className="bg-orange-50 p-4 rounded-lg">
-                        <div className="text-sm text-orange-600 font-semibold mb-1">幅調整板</div>
-                        <div className="text-2xl font-bold text-orange-900">
-                          {result.adjustedBoards}枚
-                        </div>
-                        <div className="text-sm text-orange-700 mt-1">
-                          {result.adjustedWidth}mm × {result.adjustedBoards}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-gray-50 p-4 rounded-lg space-y-2 mb-4">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">合計床板枚数:</span>
-                        <span className="font-bold text-gray-800">{result.totalBoards}枚</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">カット幅:</span>
-                        <span className="font-bold text-orange-600">
-                          -{result.widthDiff}mm
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">実際の施工幅:</span>
-                        <span className="font-bold text-gray-800">{result.totalWidth}mm</span>
-                      </div>
-                    </div>
-
-                    {index === 0 && (
-                      <button
-                        onClick={() => shareResult(result)}
-                        className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                        </svg>
-                        この結果を共有
-                      </button>
-                    )}
-                  </div>
+                {results.normal.map((r, i) => (
+                  <ResultRow
+                    key={`n${i}`}
+                    result={r}
+                    label={i + 1}
+                    tweak={false}
+                    boardWidth={boardWidth}
+                    jointWidth={jointWidth}
+                    chosen={!!chosenActive && sameResult(chosenActive.result, r)}
+                    onPick={() => pick(r, `案${i + 1}`)}
+                  />
                 ))}
+
+                {results.tweaks.length > 0 && (
+                  <>
+                    <div className="text-sm font-bold text-amber-700 mx-1 mt-4 mb-2 pt-3 border-t-2 border-dashed border-amber-300">
+                      目地を少し調整すると <span className="font-normal text-xs text-gray-400 ml-1">調整が少ない順</span>
+                    </div>
+                    {results.tweaks.map((r, i) => (
+                      <ResultRow
+                        key={`t${i}`}
+                        result={r}
+                        label={`調${i + 1}`}
+                        tweak
+                        boardWidth={boardWidth}
+                        jointWidth={jointWidth}
+                        chosen={!!chosenActive && sameResult(chosenActive.result, r)}
+                        onPick={() => pick(r, `調整案${i + 1}`)}
+                      />
+                    ))}
+                  </>
+                )}
               </>
             )}
           </div>
         )}
 
-        <div className="mt-8 bg-blue-50 rounded-xl p-6 border-2 border-blue-200">
-          <h3 className="font-bold text-blue-900 mb-3 flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" />
-            使い方
-          </h3>
-          <ul className="text-sm text-blue-800 space-y-2">
-            <li>• <strong>施工幅</strong>: ウッドデッキの全体幅を入力</li>
-            <li>• <strong>床板幅</strong>: 定尺の床板幅（例: 150mm、105mm）</li>
-            <li>• <strong>目地幅</strong>: 床板間の隙間（例: 5mm）</li>
-            <li>• <strong>最低床板幅</strong>: カット後の最小許容幅</li>
-            <li>• <strong>両端の目地</strong>: 壁や枠との間にも目地が必要な場合はチェック</li>
-            <li>• 幅調整板は0.5mm単位で計算されます</li>
-            <li>• 調整枚数が少なく、幅が広い順に表示されます</li>
-          </ul>
-        </div>
-
-        <div className="mt-6 text-center pb-4">
-          <a 
-            href="https://lasco.jp/" 
-            target="_blank" 
+        <div className="mt-4 pt-2.5 pb-2 border-t border-amber-200 flex items-center justify-between gap-2">
+          <a
+            href="https://lasco.jp/"
+            target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-amber-600 transition-colors"
+            className="flex items-center gap-2 text-xs text-gray-500 min-w-0"
           >
-            <span>Powered by</span>
-            <span className="font-bold">株式会社ラスコジャパン</span>
+            <span className="flex-none w-6 h-6 rounded-md bg-gradient-to-br from-amber-400 to-orange-500 text-white text-[13px] font-black flex items-center justify-center shadow-sm" aria-hidden="true">L</span>
+            <span className="whitespace-nowrap">Powered by <b className="text-gray-700">株式会社ラスコジャパン</b></span>
+            <span className="flex-none w-3.5 h-3.5 text-gray-400"><IconExternal /></span>
           </a>
-          <div className="text-xs text-gray-400 mt-2">
-            v{version}
-          </div>
+          <span className="flex-none text-[11px] text-gray-400">v{version}</span>
         </div>
       </div>
+      {offlineToast && (
+        <div className="fixed top-3 left-0 right-0 z-30 flex justify-center px-3 pointer-events-none">
+          <div className="bg-green-700 text-white text-sm font-bold rounded-full px-4 py-2 shadow-lg">
+            ✓ オフラインでも使えるようになりました
+          </div>
+        </div>
+      )}
+
+      {showGuide && <HomeScreenGuide onClose={() => setShowGuide(false)} installPrompt={installPrompt} onInstall={runInstall} />}
+
+      {chosenActive && (
+        <AdoptBar
+          chosen={chosenActive}
+          installWidth={installWidth}
+          boardWidth={boardWidth}
+          jointWidth={jointWidth}
+          onShare={() => shareResult(chosenActive.result)}
+          onClear={() => setChosen(null)}
+        />
+      )}
     </div>
   );
 }
