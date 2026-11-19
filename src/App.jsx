@@ -293,6 +293,25 @@ export default function App() {
   const [showVersionInfo, setShowVersionInfo] = useState(false);
   const [showCond, setShowCond] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [offlineReady, setOfflineReady] = useState(() => {
+    try {
+      return !!(navigator.serviceWorker && navigator.serviceWorker.controller) || localStorage.getItem('deckOfflineReady') === '1';
+    } catch (e) {
+      return false;
+    }
+  });
+  const [offlineToast, setOfflineToast] = useState(false);
+
+  // オフライン用の保存が終わったときに、一度だけ知らせる
+  React.useEffect(() => {
+    const onReady = () => {
+      setOfflineReady(true);
+      setOfflineToast(true);
+      setTimeout(() => setOfflineToast(false), 5000);
+    };
+    window.addEventListener('deck-offline-ready', onReady);
+    return () => window.removeEventListener('deck-offline-ready', onReady);
+  }, []);
   const [installed, setInstalled] = useState(isStandalone);
   const [installPrompt, setInstallPrompt] = useState(null);
 
@@ -330,7 +349,7 @@ export default function App() {
     {
       version: '2026.11.19',
       changes: [
-        'オフライン対応（一度開けば電波がなくても使えます）',
+        'オフライン対応（一度開けば電波がなくても使えます。使えるようになると画面上に表示します）',
         '入力欄を刷新（施工幅を大きく・入力すると自動で計算・条件は折りたたみ）',
         'アイコンを刷新（ホーム画面用のアイコンも追加）',
         '「ホーム画面に追加」の案内を追加（iPhone／Android）',
@@ -529,6 +548,11 @@ https://lasco.jp/`;
 
         {showVersionInfo && (
           <div className="mb-3 bg-white rounded-xl p-4 border-2 border-gray-200">
+            <div className={`mb-3 text-sm font-bold rounded-lg px-3 py-2 ${offlineReady ? 'bg-green-50 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+              {offlineReady
+                ? '✓ オフライン対応済み（電波がなくても開けます）'
+                : 'オフライン用の準備中、または未対応です。電波のある所で、一度このまま開いたままお待ちください。'}
+            </div>
             <h3 className="font-bold text-gray-800 mb-3">バージョン情報 <span className="ml-1 text-xs font-mono bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">v{version}</span></h3>
             <div className="space-y-4 max-h-64 overflow-y-auto">
               {updateHistory.map((update, index) => (
@@ -737,6 +761,14 @@ https://lasco.jp/`;
           <span className="flex-none text-[11px] text-gray-400">v{version}</span>
         </div>
       </div>
+      {offlineToast && (
+        <div className="fixed top-3 left-0 right-0 z-30 flex justify-center px-3 pointer-events-none">
+          <div className="bg-green-700 text-white text-sm font-bold rounded-full px-4 py-2 shadow-lg">
+            ✓ オフラインでも使えるようになりました
+          </div>
+        </div>
+      )}
+
       {showGuide && <HomeScreenGuide onClose={() => setShowGuide(false)} installPrompt={installPrompt} onInstall={runInstall} />}
 
       {chosenActive && (
