@@ -478,6 +478,7 @@ export default function App() {
   const [results, setResults] = useState(null);
   const [chosen, setChosen] = useState(loadChosen);
   const [showVersionInfo, setShowVersionInfo] = useState(false);
+  const [showDiag, setShowDiag] = useState(false);
   const [showCond, setShowCond] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [history, setHistory] = useState(loadHistory);
@@ -525,7 +526,7 @@ export default function App() {
 
   // バージョン情報を開いたときに、オフライン対応の診断を行う
   React.useEffect(() => {
-    if (!showVersionInfo) return undefined;
+    if (!showVersionInfo || !showDiag) return undefined;
     let alive = true;
     const run = () => collectOfflineDiagnostics().then((rows) => alive && setDiag(rows));
     run();
@@ -536,7 +537,7 @@ export default function App() {
       window.removeEventListener('online', run);
       window.removeEventListener('offline', run);
     };
-  }, [showVersionInfo]);
+  }, [showVersionInfo, showDiag]);
 
   const runInstall = async () => {
     if (!installPrompt) return;
@@ -557,6 +558,7 @@ export default function App() {
         'オフライン対応（一度開けば電波がなくても使えます。使えるようになると画面上に表示します。バージョン情報にオフライン診断を追加）',
         '入力欄を刷新（施工幅を大きく・入力すると自動で計算・条件は折りたたみ）',
         'アイコンを刷新（ホーム画面用のアイコンも追加）',
+        'オフライン診断は、バージョン情報のオフライン表示をタップすると開く形に変更',
         '採用の履歴を追加（右上の時計ボタン。タップでその条件と案を再表示。メモも書けます）',
         '床板幅の初期値を145mmに変更（以前に入力した値は、そのまま引き継がれます）',
         '「ホーム画面に追加」の案内を追加（iPhone／Android）',
@@ -805,12 +807,20 @@ https://lasco.jp/`;
 
         {showVersionInfo && (
           <div className="mb-3 bg-white rounded-xl p-4 border-2 border-gray-200">
-            <div className={`mb-3 text-sm font-bold rounded-lg px-3 py-2 ${offlineReady ? 'bg-green-50 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
-              {offlineReady
-                ? '✓ オフライン対応済み（電波がなくても開けます）'
-                : 'オフライン用の準備中、または未対応です。電波のある所で、一度このまま開いたままお待ちください。'}
-            </div>
-            {diag && (
+            <button
+              onClick={() => setShowDiag(!showDiag)}
+              aria-expanded={showDiag}
+              className={`w-full flex items-center gap-2 text-left text-sm font-bold rounded-lg px-3 py-2 ${showDiag ? 'mb-2' : 'mb-3'} ${offlineReady ? 'bg-green-50 text-green-800' : 'bg-gray-100 text-gray-600'}`}
+            >
+              <span className="flex-1">
+                {offlineReady
+                  ? '✓ オフライン対応済み（電波がなくても開けます）'
+                  : 'オフライン用の準備中、または未対応です。電波のある所で、一度このまま開いたままお待ちください。'}
+              </span>
+              <span className="flex-none text-xs font-normal opacity-70">詳細</span>
+              <span className="flex-none w-4 h-4"><IconChevron up={showDiag} /></span>
+            </button>
+            {showDiag && diag && (
               <div className="mb-3 rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-700">
                 <div className="font-bold text-gray-500 mb-1">オフライン診断（うまく動かないときに、この内容を教えてください）</div>
                 {diag.map((r) => (
