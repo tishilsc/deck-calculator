@@ -3,9 +3,9 @@ import { Calculator, Hammer, AlertCircle, Info } from 'lucide-react';
 import { calculateBoards as calc, validateInputs } from './calc';
 
 const EDGE_OPTIONS = [
-  { value: 'both', label: '両端にあり', note: '壁や枠との間の両側に目地を確保' },
-  { value: 'one', label: '片側のみ', note: '片側だけ壁や枠との間に目地を確保' },
-  { value: 'none', label: 'なし', note: '板どうしの間だけ（端は目地なし）' }
+  { value: 'both', label: '両端にあり' },
+  { value: 'one', label: '片側のみ' },
+  { value: 'none', label: 'なし' }
 ];
 const EDGE_LABEL = { both: '両端にあり', one: '片側のみ', none: 'なし' };
 
@@ -283,25 +283,19 @@ https://lasco.jp/`;
             </div>
 
             <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
-              <div className="text-sm font-semibold text-gray-700 mb-1">端の目地</div>
-              <div className="text-xs text-gray-500 mb-3">
-                壁や枠との間にも目地幅の隙間を設けるかを選びます
-              </div>
+              <div className="text-sm font-semibold text-gray-700 mb-3">端の目地</div>
               <div className="space-y-2">
                 {EDGE_OPTIONS.map((opt) => (
-                  <label key={opt.value} className="flex items-start gap-3 cursor-pointer">
+                  <label key={opt.value} className="flex items-center gap-3 cursor-pointer">
                     <input
                       type="radio"
                       name="edgeMode"
                       value={opt.value}
                       checked={edgeMode === opt.value}
                       onChange={() => setEdgeMode(opt.value)}
-                      className="mt-1 w-5 h-5 border-gray-300 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                      className="w-5 h-5 border-gray-300 text-amber-500 focus:ring-amber-500 cursor-pointer"
                     />
-                    <div>
-                      <div className="text-sm font-semibold text-gray-700">{opt.label}</div>
-                      <div className="text-xs text-gray-500">{opt.note}</div>
-                    </div>
+                    <div className="text-sm font-semibold text-gray-700">{opt.label}</div>
                   </label>
                 ))}
               </div>
@@ -438,7 +432,6 @@ https://lasco.jp/`;
             <li>• <strong>床板幅</strong>: 定尺の床板幅（例: 150mm、105mm）</li>
             <li>• <strong>目地幅</strong>: 床板間の隙間（例: 5mm）</li>
             <li>• <strong>最低床板幅</strong>: カット後の最小許容幅</li>
-            <li>• <strong>端の目地</strong>: 両端にあり／片側のみ／なし から選択</li>
             <li>• 定尺板だけで収まる場合は「カット不要」の案が先頭に出ます</li>
             <li>• 一度開けば、電波がなくてもオフラインで使えます</li>
             <li>• 幅調整板は0.5mm単位で計算されます</li>
