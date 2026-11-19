@@ -52,6 +52,12 @@ const IconDots = () => (
 const IconExternal = () => (
   <svg {...svgProps} strokeWidth={2.2}><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5" /></svg>
 );
+const IconClock = () => (
+  <svg {...svgProps} strokeWidth={2.2}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+);
+const IconPen = () => (
+  <svg {...svgProps} strokeWidth={2.2}><path d="M4 20h4L19 9l-4-4L4 16z" /></svg>
+);
 const IconClose = () => (
   <svg {...svgProps} strokeWidth={2.6}><path d="M6 6l12 12M18 6L6 18" /></svg>
 );
@@ -201,6 +207,146 @@ function Step({ n, children }) {
   );
 }
 
+// ---- 採用の履歴 ----
+const HISTORY_KEY = 'deckAdoptHistory';
+const HISTORY_MAX = 30;
+function loadHistory() {
+  try {
+    const v = JSON.parse(localStorage.getItem(HISTORY_KEY));
+    return Array.isArray(v) ? v : [];
+  } catch (e) {
+    return [];
+  }
+}
+const pad2 = (n) => String(n).padStart(2, '0');
+function formatHistoryTime(ts) {
+  const d = new Date(ts);
+  const now = new Date();
+  const dayStart = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((dayStart(now) - dayStart(d)) / 86400000);
+  const hm = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  if (diffDays === 0) return `今日 ${hm}`;
+  if (diffDays === 1) return `昨日 ${hm}`;
+  return `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
+}
+
+// メモ（現場名など）。タップして書き換える
+function MemoRow({ value, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(value);
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        maxLength={40}
+        value={text}
+        placeholder="現場名など"
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => {
+          setEditing(false);
+          onSave(text.trim());
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+        }}
+        className="mt-2 w-full rounded-lg border-2 border-amber-400 px-2 py-1 text-[15px] font-semibold text-gray-800 focus:outline-none"
+      />
+    );
+  }
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        setText(value);
+        setEditing(true);
+      }}
+      className={`mt-2 flex items-center gap-1.5 text-[14px] ${value ? 'font-semibold text-gray-700' : 'text-gray-400'}`}
+    >
+      <span className="w-3.5 h-3.5 text-gray-400"><IconPen /></span>
+      {value || 'メモを追加（現場名など）'}
+    </button>
+  );
+}
+
+function HistorySheet({ items, onClose, onRestore, onDelete, onClearAll, onMemo }) {
+  return (
+    <div className="fixed inset-0 z-20 bg-black/40 flex items-end" onClick={onClose}>
+      <div
+        className="w-full max-w-2xl mx-auto bg-white rounded-t-2xl p-4 pb-5 max-h-[88vh] overflow-y-auto"
+        role="dialog"
+        aria-label="採用の履歴"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2">
+          <span className="w-6 h-6 text-amber-600"><IconClock /></span>
+          <h2 className="font-bold text-gray-900 text-lg">採用の履歴</h2>
+          <button onClick={onClose} aria-label="閉じる" className="ml-auto w-9 h-9 rounded-lg bg-gray-100 text-gray-500 p-2"><IconClose /></button>
+        </div>
+        <p className="text-[13px] text-gray-500 mt-1.5 mb-3 leading-relaxed">
+          この端末に、最近の{HISTORY_MAX}件まで保存されます。タップすると、その条件と案をもう一度表示します。
+        </p>
+        {items.length === 0 && <p className="text-sm text-gray-400 text-center py-6">まだ履歴はありません</p>}
+        {items.map((h) => {
+          const r = h.result;
+          const j = Number(h.inputs.jointWidth);
+          return (
+            <div
+              key={h.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => onRestore(h)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && e.target === e.currentTarget) onRestore(h);
+              }}
+              className="border-2 border-gray-200 rounded-xl px-3 py-2 mb-2 cursor-pointer active:bg-amber-50"
+            >
+              <div className="flex items-baseline gap-1">
+                <b className="text-2xl font-extrabold text-gray-900">{h.inputs.installWidth}</b>
+                <span className="text-[13px] text-gray-500">mm</span>
+                <span className="ml-auto text-[12.5px] text-gray-500">{formatHistoryTime(h.savedAt)}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(h.id);
+                  }}
+                  aria-label="この履歴を削除"
+                  className="w-6 h-6 ml-1 self-center text-gray-400 p-0.5"
+                >
+                  <IconClose />
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                <span className="text-[12.5px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                  定尺 {h.inputs.boardWidth} × {r.standardBoards}枚
+                </span>
+                {r.adjustedBoards > 0 ? (
+                  <span className="text-[12.5px] font-bold bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full">
+                    カット {r.adjustedWidth}mm × {r.adjustedBoards}枚
+                  </span>
+                ) : (
+                  <span className="text-[12.5px] font-bold bg-green-50 text-green-700 px-2 py-0.5 rounded-full">カット不要</span>
+                )}
+                {r.jointAdjust !== 0 && (
+                  <span className="text-[12.5px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">
+                    目地 {Math.abs(r.jointAdjust)}か所 → {j + (r.jointAdjust > 0 ? JOINT_EXTRA : -JOINT_EXTRA)}mm
+                  </span>
+                )}
+              </div>
+              <MemoRow value={h.memo || ''} onSave={(m) => onMemo(h.id, m)} />
+            </div>
+          );
+        })}
+        {items.length > 0 && (
+          <button onClick={onClearAll} className="block mx-auto mt-2 text-[13px] text-gray-400 px-3 py-1">
+            すべて消す
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function HomeScreenGuide({ onClose, installPrompt, onInstall }) {
   const [tab, setTab] = useState(detectPlatform);
   return (
@@ -334,6 +480,8 @@ export default function App() {
   const [showVersionInfo, setShowVersionInfo] = useState(false);
   const [showCond, setShowCond] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [history, setHistory] = useState(loadHistory);
+  const [showHistory, setShowHistory] = useState(false);
   const [offlineReady, setOfflineReady] = useState(() => {
     try {
       return !!(navigator.serviceWorker && navigator.serviceWorker.controller) || localStorage.getItem('deckOfflineReady') === '1';
@@ -409,6 +557,7 @@ export default function App() {
         'オフライン対応（一度開けば電波がなくても使えます。使えるようになると画面上に表示します。バージョン情報にオフライン診断を追加）',
         '入力欄を刷新（施工幅を大きく・入力すると自動で計算・条件は折りたたみ）',
         'アイコンを刷新（ホーム画面用のアイコンも追加）',
+        '採用の履歴を追加（右上の時計ボタン。タップでその条件と案を再表示。メモも書けます）',
         '床板幅の初期値を145mmに変更（以前に入力した値は、そのまま引き継がれます）',
         '「ホーム画面に追加」の案内を追加（iPhone／Android）',
         '端の目地を「両端にあり／片側のみ／なし」から選択可能に（初期値は両端にあり）',
@@ -575,9 +724,44 @@ https://lasco.jp/`;
     }
   }, [chosen]);
 
+  // 採用の履歴を保存
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    } catch (e) {
+      // 保存できない環境では無視
+    }
+  }, [history]);
+
+  const addHistory = (result, name) => {
+    const inputs = { installWidth, boardWidth, jointWidth, minBoardWidth, edgeMode };
+    setHistory((prev) => {
+      const old = prev.find((h) => h.sig === currentSig && sameResult(h.result, result));
+      const rest = prev.filter((h) => h !== old);
+      const entry = { id: Date.now().toString(36), savedAt: Date.now(), sig: currentSig, inputs, name, result, memo: old ? old.memo : '' };
+      return [entry, ...rest].slice(0, HISTORY_MAX);
+    });
+  };
+
   const pick = (result, name) => {
-    if (chosenActive && sameResult(chosenActive.result, result)) setChosen(null);
-    else setChosen({ sig: currentSig, name, result });
+    if (chosenActive && sameResult(chosenActive.result, result)) {
+      setChosen(null);
+    } else {
+      setChosen({ sig: currentSig, name, result });
+      addHistory(result, name);
+    }
+  };
+
+  // 履歴から、その条件と案を再表示する
+  const restoreHistory = (h) => {
+    const i = h.inputs;
+    setInstallWidth(i.installWidth);
+    setBoardWidth(i.boardWidth);
+    setJointWidth(i.jointWidth);
+    setMinBoardWidth(i.minBoardWidth);
+    setEdgeMode(i.edgeMode);
+    setChosen({ sig: [i.installWidth, i.boardWidth, i.jointWidth, i.minBoardWidth, i.edgeMode].join('|'), name: h.name, result: h.result });
+    setShowHistory(false);
   };
 
   return (
@@ -586,22 +770,37 @@ https://lasco.jp/`;
         <div className="flex items-center gap-2 px-1 pb-1.5">
           <div className="w-7 h-7 flex-none"><AppLogo /></div>
           <h1 className="text-base font-bold text-gray-800 whitespace-nowrap">床板計算</h1>
-          {!installed && (
+          <div className="ml-auto flex items-center gap-2">
+            {history.length > 0 && (
+              <button
+                onClick={() => setShowHistory(true)}
+                aria-label="採用の履歴"
+                className="relative w-9 h-9 rounded-lg border border-gray-300 bg-white/70 text-gray-600 p-2"
+              >
+                <IconClock />
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full bg-amber-500 text-white text-[11px] font-extrabold flex items-center justify-center px-1">
+                  {history.length}
+                </span>
+              </button>
+            )}
+            {!installed && (
+              <button
+                onClick={() => setShowGuide(true)}
+                aria-label="ホーム画面に追加"
+                className="flex items-center gap-1 whitespace-nowrap rounded-lg border border-gray-300 bg-white/70 text-gray-600 text-xs font-bold px-2 py-1.5"
+              >
+                <span className="w-4 h-4"><IconAddHome /></span>
+                ホームに追加
+              </button>
+            )}
             <button
-              onClick={() => setShowGuide(true)}
-              className="ml-auto flex items-center gap-1 whitespace-nowrap rounded-lg border border-gray-300 bg-white/70 text-gray-600 text-xs font-bold px-2 py-1"
+              onClick={() => setShowVersionInfo(!showVersionInfo)}
+              className="p-1 rounded-lg text-gray-500"
+              aria-label="バージョン情報"
             >
-              <span className="w-4 h-4"><IconAddHome /></span>
-              ホーム画面に追加
+              <Info className="w-5 h-5" />
             </button>
-          )}
-          <button
-            onClick={() => setShowVersionInfo(!showVersionInfo)}
-            className={`${installed ? 'ml-auto ' : ''}p-1.5 rounded-lg text-gray-500`}
-            aria-label="バージョン情報"
-          >
-            <Info className="w-5 h-5" />
-          </button>
+          </div>
         </div>
 
         {showVersionInfo && (
@@ -835,6 +1034,19 @@ https://lasco.jp/`;
             ✓ オフラインでも使えるようになりました
           </div>
         </div>
+      )}
+
+      {showHistory && (
+        <HistorySheet
+          items={history}
+          onClose={() => setShowHistory(false)}
+          onRestore={restoreHistory}
+          onDelete={(id) => setHistory((prev) => prev.filter((h) => h.id !== id))}
+          onClearAll={() => {
+            if (window.confirm('履歴をすべて消します。よろしいですか？')) setHistory([]);
+          }}
+          onMemo={(id, memo) => setHistory((prev) => prev.map((h) => (h.id === id ? { ...h, memo } : h)))}
+        />
       )}
 
       {showGuide && <HomeScreenGuide onClose={() => setShowGuide(false)} installPrompt={installPrompt} onInstall={runInstall} />}
