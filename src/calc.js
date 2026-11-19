@@ -14,62 +14,69 @@ export function jointCount(totalBoards, edgeMode) {
 
 const roundStep = (v) => Math.round(v / STEP) * STEP;
 
+export const JOINT_EXTRA = 1; // 目地を広げるときの加算幅(mm)。1か所あたり
+
 /**
  * 施工幅 W に対する割付案を返す（最大5件）。
- * 調整枚数が少ない順、同数なら調整板の幅が広い順。同じ調整枚数は1案のみ。
- * 調整板 0 枚（定尺板だけで収まる）の案も含む。
+ * 調整枚数が少ない順、同数なら調整板の幅が広い順、同じなら目地を広げる箇所が少ない順。
+ * 同じ調整枚数は1案のみ。調整板 0 枚（定尺板だけで収まる）の案も含む。
+ *
+ * maxWidenedJoints > 0 のときは、設定どおりの目地では収まらない（施工幅が少し余る）場合に限り、
+ * 目地のうち必要最小限の箇所を JOINT_EXTRA(mm) 広げた案も候補にする。
+ * 目地を広げるのは調整板の幅が定尺幅を超えてしまう場合だけで、広げても余りがなくなるまでの最小箇所数。
  */
-export function calculateBoards({ W, B, J, Bmin, edgeMode = 'both' }) {
+export function calculateBoards({ W, B, J, Bmin, edgeMode = 'both', maxWidenedJoints = 0 }) {
   const solutions = [];
 
   for (let totalBoards = 1; totalBoards <= MAX_BOARDS; totalBoards++) {
-    const totalJointWidth = jointCount(totalBoards, edgeMode) * J;
+    const jointNum = jointCount(totalBoards, edgeMode);
+    const baseJointWidth = jointNum * J;
     // 定尺板だけでも施工幅を超えるなら、これ以上枚数を増やしても無理
-    if (totalBoards * Bmin + totalJointWidth > W + STEP) break;
+    if (totalBoards * Bmin + baseJointWidth > W + STEP) break;
+    const kLimit = Math.min(maxWidenedJoints, jointNum);
 
     for (let adjustedBoards = 0; adjustedBoards <= totalBoards; adjustedBoards++) {
       const standardBoards = totalBoards - adjustedBoards;
-      const remainingWidth = W - totalJointWidth - standardBoards * B;
+      const rem0 = W - baseJointWidth - standardBoards * B;
 
-      if (adjustedBoards === 0) {
-        // 定尺板のみ: 0.5mm 以内で収まる場合だけ
-        if (Math.abs(remainingWidth) <= STEP / 2) {
-          solutions.push({
-            totalBoards,
-            standardBoards,
-            adjustedBoards: 0,
-            adjustedWidth: null,
-            widthDiff: 0,
-            totalWidth: roundStep(standardBoards * B + totalJointWidth),
-            gap: roundStep(standardBoards * B + totalJointWidth - W),
-          });
+      // 広げる箇所数 k を 0 から増やし、最初に条件を満たすものを採用（＝最小箇所数）
+      for (let k = 0; k <= kLimit; k++) {
+        const jointWidth = baseJointWidth + k * JOINT_EXTRA;
+        const remainingWidth = rem0 - k * JOINT_EXTRA;
+        let adjustedWidth = null;
+
+        if (adjustedBoards === 0) {
+          // 定尺板のみ: 0.5mm 以内で収まる場合だけ
+          if (Math.abs(remainingWidth) > STEP / 2) continue;
+        } else {
+          adjustedWidth = roundStep(remainingWidth / adjustedBoards);
+          // 定尺幅と同じなら実質カット不要（調整板 0 枚の案と重複するので除外）
+          if (adjustedWidth < Bmin || adjustedWidth >= B) continue;
         }
-        continue;
-      }
 
-      const adjustedWidth = roundStep(remainingWidth / adjustedBoards);
-      if (adjustedWidth >= Bmin && adjustedWidth <= B) {
         const totalWidth = roundStep(
-          standardBoards * B + adjustedBoards * adjustedWidth + totalJointWidth
+          standardBoards * B + adjustedBoards * (adjustedWidth ?? 0) + jointWidth
         );
         solutions.push({
           totalBoards,
           standardBoards,
           adjustedBoards,
           adjustedWidth,
-          widthDiff: roundStep(B - adjustedWidth),
+          widthDiff: adjustedBoards > 0 ? roundStep(B - adjustedWidth) : 0,
           totalWidth,
           gap: roundStep(totalWidth - W), // 丸めによる施工幅とのズレ
+          widenedJoints: k, // 目地を +JOINT_EXTRA にする箇所数（0 なら設定どおり）
         });
+        break;
       }
     }
   }
 
-  solutions.sort((a, b) =>
-    a.adjustedBoards !== b.adjustedBoards
-      ? a.adjustedBoards - b.adjustedBoards
-      : (b.adjustedWidth ?? 0) - (a.adjustedWidth ?? 0)
-  );
+  solutions.sort((a, b) => {
+    if (a.adjustedBoards !== b.adjustedBoards) return a.adjustedBoards - b.adjustedBoards;
+    if ((b.adjustedWidth ?? 0) !== (a.adjustedWidth ?? 0)) return (b.adjustedWidth ?? 0) - (a.adjustedWidth ?? 0);
+    return a.widenedJoints - b.widenedJoints;
+  });
 
   const seen = new Set();
   const filtered = [];

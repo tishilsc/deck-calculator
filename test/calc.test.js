@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateBoards, jointCount, validateInputs } from '../src/calc.js';
+import { calculateBoards, jointCount, validateInputs, JOINT_EXTRA } from '../src/calc.js';
 
 const base = { B: 150, J: 5, Bmin: 80 };
 
@@ -51,4 +51,44 @@ test('入力検査', () => {
   assert.deepEqual(validateInputs({ installWidth: '3000', boardWidth: '150', jointWidth: '0', minBoardWidth: '80' }), {});
   assert.ok(validateInputs({ installWidth: '3000', boardWidth: '150', jointWidth: '5', minBoardWidth: '200' }).minBoardWidth);
   assert.ok(validateInputs({ installWidth: '-1', boardWidth: '150', jointWidth: '5', minBoardWidth: '80' }).installWidth);
+});
+
+test('目地を広げない設定なら、従来どおり設定した目地だけで提案する', () => {
+  const r = calculateBoards({ ...base, W: 3123, edgeMode: 'both', maxWidenedJoints: 0 });
+  assert.ok(r.every((s) => s.widenedJoints === 0));
+  assert.equal(r[0].adjustedBoards, 2);
+});
+
+test('施工幅が少し余るとき、最小箇所の目地を+1mmしてカット不要にできる', () => {
+  // 20枚・両端あり: 150*20 + 5*21 = 3105。3123 は 18mm 余る → 18か所を6mmに
+  const r = calculateBoards({ ...base, W: 3123, edgeMode: 'both', maxWidenedJoints: 20 });
+  assert.equal(r[0].adjustedBoards, 0);
+  assert.equal(r[0].standardBoards, 20);
+  assert.equal(r[0].widenedJoints, 18);
+  assert.equal(r[0].totalWidth, 3123);
+});
+
+test('広げてよい箇所数の上限を超える案は出さない', () => {
+  const r = calculateBoards({ ...base, W: 3123, edgeMode: 'both', maxWidenedJoints: 5 });
+  assert.ok(r.every((s) => s.widenedJoints <= 5));
+  assert.ok(r[0].adjustedBoards >= 1);
+});
+
+test('目地を広げた案の寸法が施工幅に合う', () => {
+  for (const W of [3010, 3047, 3123, 4560, 5011]) {
+    for (const s of calculateBoards({ ...base, W, edgeMode: 'both', maxWidenedJoints: 5 })) {
+      const joints = (s.totalBoards + 1) * 5 + s.widenedJoints * JOINT_EXTRA;
+      const total = s.standardBoards * 150 + s.adjustedBoards * (s.adjustedWidth ?? 0) + joints;
+      assert.ok(Math.abs(total - W) <= 0.5 * Math.max(1, s.adjustedBoards), `W=${W}`);
+    }
+  }
+});
+
+test('調整板の幅が定尺幅と同じ案（実質カットなし）は出さない', () => {
+  for (const W of [3000, 3112, 3123, 4560]) {
+    for (const mw of [0, 10]) {
+      const r = calculateBoards({ ...base, W, edgeMode: 'both', maxWidenedJoints: mw });
+      assert.ok(r.every((s) => s.adjustedBoards === 0 || s.adjustedWidth < 150), `W=${W}`);
+    }
+  }
 });

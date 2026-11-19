@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Calculator, Hammer, AlertCircle, Info } from 'lucide-react';
-import { calculateBoards as calc, validateInputs } from './calc';
+import { calculateBoards as calc, validateInputs, JOINT_EXTRA } from './calc';
 
 const EDGE_OPTIONS = [
   { value: 'both', label: '両端にあり' },
   { value: 'one', label: '片側のみ' },
   { value: 'none', label: 'なし' }
 ];
+const WIDEN_OPTIONS = [0, 3, 5, 10]; // 目地を広げてよい最大箇所数
 const EDGE_LABEL = { both: '両端にあり', one: '片側のみ', none: 'なし' };
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
   const [jointWidth, setJointWidth] = useState('5');
   const [minBoardWidth, setMinBoardWidth] = useState('80');
   const [edgeMode, setEdgeMode] = useState('both');
+  const [maxWidened, setMaxWidened] = useState(0);
   const [results, setResults] = useState(null);
   const [showVersionInfo, setShowVersionInfo] = useState(false);
 
@@ -27,6 +29,7 @@ export default function App() {
         '端の目地を「両端にあり／片側のみ／なし」から選択可能に（初期値は両端にあり）',
         '最大試行枚数を1000枚に戻し、広い施工幅でも提案が出るように修正',
         '定尺板だけで収まる場合も提案するように変更',
+        '目地の微調整：施工幅が少し余るとき、必要最小限の目地を+1mmして加工を減らす提案（設定で最大箇所数を選択、初期値は使わない）',
         '目地幅0mmを入力できるように修正',
         '丸めによる施工幅とのズレを表示',
         '共有テキストに最低床板幅と端の目地を追加'
@@ -67,6 +70,7 @@ export default function App() {
         if (data.minBoardWidth) setMinBoardWidth(data.minBoardWidth);
         if (data.edgeMode) setEdgeMode(data.edgeMode);
         else if (data.edgeJoints !== undefined) setEdgeMode(data.edgeJoints ? 'both' : 'none');
+        if (WIDEN_OPTIONS.includes(data.maxWidened)) setMaxWidened(data.maxWidened);
       }
     } catch (e) {
       // エラー時は無視
@@ -80,14 +84,15 @@ export default function App() {
       boardWidth,
       jointWidth,
       minBoardWidth,
-      edgeMode
+      edgeMode,
+      maxWidened
     };
     try {
       localStorage.setItem('deckCalculatorHistory', JSON.stringify(data));
     } catch (e) {
       // 保存できない環境では無視
     }
-  }, [installWidth, boardWidth, jointWidth, minBoardWidth, edgeMode]);
+  }, [installWidth, boardWidth, jointWidth, minBoardWidth, edgeMode, maxWidened]);
 
   // 入力値のリアルタイムバリデーション
   React.useEffect(() => {
@@ -109,7 +114,7 @@ ${result.adjustedBoards > 0
 カット幅: -${result.widthDiff}mm`
   : '幅調整板: なし'}
 合計: ${result.totalBoards}枚
-実際の施工幅: ${result.totalWidth}mm${result.gap !== 0 ? `（施工幅との差 ${result.gap > 0 ? '+' : ''}${result.gap}mm）` : ''}
+${result.widenedJoints > 0 ? `目地: ${jointWidth}mm（うち${result.widenedJoints}か所を${Number(jointWidth) + JOINT_EXTRA}mmに）\n` : ''}実際の施工幅: ${result.totalWidth}mm${result.gap !== 0 ? `（施工幅との差 ${result.gap > 0 ? '+' : ''}${result.gap}mm）` : ''}
 
 株式会社ラスコジャパン
 https://lasco.jp/`;
@@ -148,7 +153,7 @@ https://lasco.jp/`;
       return;
     }
 
-    setResults(calc({ W, B, J, Bmin, edgeMode }));
+    setResults(calc({ W, B, J, Bmin, edgeMode, maxWidenedJoints: maxWidened }));
   };
 
   return (
@@ -301,6 +306,23 @@ https://lasco.jp/`;
               </div>
             </div>
 
+            <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                目地の微調整（+{JOINT_EXTRA}mm）
+              </label>
+              <select
+                value={maxWidened}
+                onChange={(e) => setMaxWidened(Number(e.target.value))}
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg bg-white text-lg focus:outline-none focus:border-amber-500"
+              >
+                {WIDEN_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    {n === 0 ? '使わない' : `最大${n}か所まで`}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <button
               onClick={calculateBoards}
               disabled={Object.keys(errors).length > 0 || !installWidth}
@@ -394,6 +416,14 @@ https://lasco.jp/`;
                         <span className="text-gray-600">実際の施工幅:</span>
                         <span className="font-bold text-gray-800">{result.totalWidth}mm</span>
                       </div>
+                      {result.widenedJoints > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">目地の微調整:</span>
+                          <span className="font-bold text-amber-700">
+                            {result.widenedJoints}か所を{Number(jointWidth) + JOINT_EXTRA}mmに（他は{jointWidth}mm）
+                          </span>
+                        </div>
+                      )}
                       {result.gap !== 0 && (
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-600">施工幅との差（0.5mm丸め）:</span>
@@ -434,6 +464,7 @@ https://lasco.jp/`;
             <li>• <strong>最低床板幅</strong>: カット後の最小許容幅</li>
             <li>• 定尺板だけで収まる場合は「カット不要」の案が先頭に出ます</li>
             <li>• 一度開けば、電波がなくてもオフラインで使えます</li>
+            <li>• <strong>目地の微調整</strong>: 施工幅が少し余るとき、必要最小限の目地を+1mmして加工を減らす案を出します</li>
             <li>• 幅調整板は0.5mm単位で計算されます</li>
             <li>• 調整枚数が少なく、幅が広い順に表示されます</li>
           </ul>
