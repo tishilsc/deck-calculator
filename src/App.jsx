@@ -273,6 +273,36 @@ function HomeScreenGuide({ onClose, installPrompt, onInstall }) {
   );
 }
 
+// オフライン対応の診断（端末の中の状態を調べて、表示用の行にする）
+async function collectOfflineDiagnostics() {
+  const rows = [];
+  const add = (label, ok, text) => rows.push({ label, ok, text });
+  add('通信', null, navigator.onLine ? 'オンライン' : 'オフライン');
+  add('開き方', null, isStandalone() ? 'ホーム画面のアプリ' : 'ブラウザ');
+  if (!('serviceWorker' in navigator)) {
+    add('サービスワーカー', false, 'このブラウザでは使えません');
+    return rows;
+  }
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    add('サービスワーカー', !!reg, reg ? `登録済み（${(reg.active && reg.active.state) || (reg.installing && 'installing') || (reg.waiting && 'waiting') || '状態不明'}）` : '未登録');
+    add('この画面を管理', !!navigator.serviceWorker.controller, navigator.serviceWorker.controller ? '管理されています' : '管理されていません');
+  } catch (e) {
+    add('サービスワーカー', false, `調べられません（${e && e.name}）`);
+  }
+  try {
+    const keys = await caches.keys();
+    let count = 0;
+    for (const k of keys) count += (await (await caches.open(k)).keys()).length;
+    const top = await caches.match('/index.html', { ignoreSearch: true });
+    add('保存ファイル', count > 0, `${count}件`);
+    add('トップ画面の保存', !!top, top ? 'あり' : 'なし');
+  } catch (e) {
+    add('保存ファイル', false, `調べられません（${e && e.name}）`);
+  }
+  return rows;
+}
+
 const CHOSEN_KEY = 'deckCalculatorChosen';
 function loadChosen() {
   try {
@@ -301,6 +331,7 @@ export default function App() {
     }
   });
   const [offlineToast, setOfflineToast] = useState(false);
+  const [diag, setDiag] = useState(null);
 
   // オフライン用の保存が終わったときに、一度だけ知らせる
   React.useEffect(() => {
@@ -333,6 +364,21 @@ export default function App() {
     };
   }, []);
 
+  // バージョン情報を開いたときに、オフライン対応の診断を行う
+  React.useEffect(() => {
+    if (!showVersionInfo) return undefined;
+    let alive = true;
+    const run = () => collectOfflineDiagnostics().then((rows) => alive && setDiag(rows));
+    run();
+    window.addEventListener('online', run);
+    window.addEventListener('offline', run);
+    return () => {
+      alive = false;
+      window.removeEventListener('online', run);
+      window.removeEventListener('offline', run);
+    };
+  }, [showVersionInfo]);
+
   const runInstall = async () => {
     if (!installPrompt) return;
     try {
@@ -349,7 +395,7 @@ export default function App() {
     {
       version: '2026.11.19',
       changes: [
-        'オフライン対応（一度開けば電波がなくても使えます。使えるようになると画面上に表示します）',
+        'オフライン対応（一度開けば電波がなくても使えます。使えるようになると画面上に表示します。バージョン情報にオフライン診断を追加）',
         '入力欄を刷新（施工幅を大きく・入力すると自動で計算・条件は折りたたみ）',
         'アイコンを刷新（ホーム画面用のアイコンも追加）',
         '「ホーム画面に追加」の案内を追加（iPhone／Android）',
@@ -553,6 +599,19 @@ https://lasco.jp/`;
                 ? '✓ オフライン対応済み（電波がなくても開けます）'
                 : 'オフライン用の準備中、または未対応です。電波のある所で、一度このまま開いたままお待ちください。'}
             </div>
+            {diag && (
+              <div className="mb-3 rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-700">
+                <div className="font-bold text-gray-500 mb-1">オフライン診断（うまく動かないときに、この内容を教えてください）</div>
+                {diag.map((r) => (
+                  <div key={r.label} className="flex justify-between gap-2 leading-6">
+                    <span className="text-gray-500">{r.label}</span>
+                    <span className={r.ok === false ? 'font-bold text-red-600' : r.ok ? 'font-bold text-green-700' : ''}>
+                      {r.ok === false ? '✗ ' : r.ok ? '✓ ' : ''}{r.text}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
             <h3 className="font-bold text-gray-800 mb-3">バージョン情報 <span className="ml-1 text-xs font-mono bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">v{version}</span></h3>
             <div className="space-y-4 max-h-64 overflow-y-auto">
               {updateHistory.map((update, index) => (
