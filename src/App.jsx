@@ -219,16 +219,20 @@ function loadHistory() {
   }
 }
 const pad2 = (n) => String(n).padStart(2, '0');
-function formatHistoryTime(ts) {
+const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+function historyDayLabel(ts) {
   const d = new Date(ts);
   const now = new Date();
   const dayStart = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diffDays = Math.round((dayStart(now) - dayStart(d)) / 86400000);
-  const hm = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-  if (diffDays === 0) return `今日 ${hm}`;
-  if (diffDays === 1) return `昨日 ${hm}`;
-  return `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
+  if (diffDays === 0) return '今日';
+  if (diffDays === 1) return '昨日';
+  return `${d.getMonth() + 1}/${d.getDate()}（${WEEKDAYS[d.getDay()]}）`;
 }
+const historyTime = (ts) => {
+  const d = new Date(ts);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
 
 // メモ（現場名など）。タップして書き換える
 function MemoRow({ value, onSave }) {
@@ -250,7 +254,7 @@ function MemoRow({ value, onSave }) {
         onKeyDown={(e) => {
           if (e.key === 'Enter') e.currentTarget.blur();
         }}
-        className="mt-2 w-full rounded-lg border-2 border-amber-400 px-2 py-1 text-[15px] font-semibold text-gray-800 focus:outline-none"
+        className="mt-2 w-full rounded-lg border-2 border-amber-400 px-2 py-1.5 text-base font-semibold text-gray-800 focus:outline-none"
       />
     );
   }
@@ -261,15 +265,27 @@ function MemoRow({ value, onSave }) {
         setText(value);
         setEditing(true);
       }}
-      className={`mt-2 flex items-center gap-1.5 text-[14px] ${value ? 'font-semibold text-gray-700' : 'text-gray-400'}`}
+      className={`mt-1.5 flex items-center gap-1.5 ${value ? 'text-base font-bold text-gray-800' : 'text-[13.5px] text-gray-400'}`}
     >
-      <span className="w-3.5 h-3.5 text-gray-400"><IconPen /></span>
+      <span className="w-4 h-4 text-gray-400"><IconPen /></span>
       {value || 'メモを追加（現場名など）'}
     </button>
   );
 }
 
-function HistorySheet({ items, onClose, onRestore, onDelete, onClearAll, onMemo }) {
+const DEFAULT_CONDITIONS = { boardWidth: '145', jointWidth: '5', minBoardWidth: '80', edgeMode: 'both' };
+const EDGE_SHORT_LABEL = { both: '両端あり', one: '片側のみ', none: '端なし' };
+
+function HistorySheet({ items, activeId, onClose, onRestore, onDelete, onClearAll, onMemo }) {
+  // 日付ごとにまとめる（並び順は新しい順のまま）
+  const groups = [];
+  items.forEach((h) => {
+    const label = historyDayLabel(h.savedAt);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.items.push(h);
+    else groups.push({ label, items: [h] });
+  });
+
   return (
     <div className="fixed inset-0 z-20 bg-black/40 flex items-end" onClick={onClose}>
       <div
@@ -280,65 +296,83 @@ function HistorySheet({ items, onClose, onRestore, onDelete, onClearAll, onMemo 
       >
         <div className="flex items-center gap-2">
           <span className="w-6 h-6 text-amber-600"><IconClock /></span>
-          <h2 className="font-bold text-gray-900 text-lg">採用の履歴</h2>
-          <button onClick={onClose} aria-label="閉じる" className="ml-auto w-9 h-9 rounded-lg bg-gray-100 text-gray-500 p-2"><IconClose /></button>
+          <h2 className="font-bold text-gray-900 text-xl">採用の履歴</h2>
+          <button onClick={onClose} aria-label="閉じる" className="ml-auto w-10 h-10 rounded-lg bg-gray-100 text-gray-500 p-2.5"><IconClose /></button>
         </div>
-        <p className="text-[13px] text-gray-500 mt-1.5 mb-3 leading-relaxed">
-          この端末に、最近の{HISTORY_MAX}件まで保存されます。タップすると、その条件と案をもう一度表示します。
-        </p>
+        <p className="text-[13px] text-gray-500 mt-1 mb-2 leading-relaxed">タップで、その条件と案を再表示（最近{HISTORY_MAX}件）</p>
         {items.length === 0 && <p className="text-sm text-gray-400 text-center py-6">まだ履歴はありません</p>}
-        {items.map((h) => {
-          const r = h.result;
-          const j = Number(h.inputs.jointWidth);
-          return (
-            <div
-              key={h.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => onRestore(h)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && e.target === e.currentTarget) onRestore(h);
-              }}
-              className="border-2 border-gray-200 rounded-xl px-3 py-2 mb-2 cursor-pointer active:bg-amber-50"
-            >
-              <div className="flex items-baseline gap-1">
-                <b className="text-2xl font-extrabold text-gray-900">{h.inputs.installWidth}</b>
-                <span className="text-[13px] text-gray-500">mm</span>
-                <span className="ml-auto text-[12.5px] text-gray-500">{formatHistoryTime(h.savedAt)}</span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(h.id);
+        {groups.map((g) => (
+          <div key={g.label}>
+            <div className="text-sm font-bold text-gray-500 mt-3 mb-1.5 px-1">{g.label}</div>
+            {g.items.map((h) => {
+              const r = h.result;
+              const j = Number(h.inputs.jointWidth);
+              const active = h.id === activeId;
+              const differs = ['boardWidth', 'jointWidth', 'minBoardWidth', 'edgeMode'].some((k) => h.inputs[k] !== DEFAULT_CONDITIONS[k]);
+              return (
+                <div
+                  key={h.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onRestore(h)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.target === e.currentTarget) onRestore(h);
                   }}
-                  aria-label="この履歴を削除"
-                  className="w-6 h-6 ml-1 self-center text-gray-400 p-0.5"
+                  className={`rounded-xl border-2 px-3 py-2.5 mb-2 cursor-pointer ${
+                    active ? 'border-green-500 bg-green-50' : 'border-gray-200 active:bg-amber-50'
+                  }`}
                 >
-                  <IconClose />
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                <span className="text-[12.5px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                  定尺 {h.inputs.boardWidth} × {r.standardBoards}枚
-                </span>
-                {r.adjustedBoards > 0 ? (
-                  <span className="text-[12.5px] font-bold bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full">
-                    カット {r.adjustedWidth}mm × {r.adjustedBoards}枚
-                  </span>
-                ) : (
-                  <span className="text-[12.5px] font-bold bg-green-50 text-green-700 px-2 py-0.5 rounded-full">カット不要</span>
-                )}
-                {r.jointAdjust !== 0 && (
-                  <span className="text-[12.5px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">
-                    目地 {Math.abs(r.jointAdjust)}か所 → {j + (r.jointAdjust > 0 ? JOINT_EXTRA : -JOINT_EXTRA)}mm
-                  </span>
-                )}
-              </div>
-              <MemoRow value={h.memo || ''} onSave={(m) => onMemo(h.id, m)} />
-            </div>
-          );
-        })}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[13px] font-bold text-gray-500">施工幅</span>
+                    <b className="text-[26px] leading-none font-extrabold text-gray-900">{h.inputs.installWidth}</b>
+                    <span className="text-sm text-gray-500 -ml-1">mm</span>
+                    {active && <span className="text-xs font-bold bg-green-600 text-white px-2 py-0.5 rounded-full">採用中</span>}
+                    <span className="ml-auto text-sm text-gray-500">{historyTime(h.savedAt)}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(h.id);
+                      }}
+                      aria-label="この履歴を削除"
+                      className="w-9 h-9 -mr-1.5 text-gray-400 p-2.5"
+                    >
+                      <IconClose />
+                    </button>
+                  </div>
+
+                  <div className="mt-1 flex items-center gap-2 flex-wrap">
+                    {r.adjustedBoards > 0 ? (
+                      <span className="text-orange-700 leading-tight">
+                        <span className="text-[13px] font-bold mr-1.5">カット</span>
+                        <WidthCount width={r.adjustedWidth} count={r.adjustedBoards} className="[&_b]:!text-[24px]" />
+                      </span>
+                    ) : (
+                      <span className="text-2xl font-extrabold text-green-700">カット不要</span>
+                    )}
+                    {r.jointAdjust !== 0 && (
+                      <span className="text-[13px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                        目地 {Math.abs(r.jointAdjust)}か所 → {j + (r.jointAdjust > 0 ? JOINT_EXTRA : -JOINT_EXTRA)}mm
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-1 text-sm text-gray-600">
+                    定尺 <b className="text-gray-800">{h.inputs.boardWidth}</b> × <b className="text-gray-800">{r.standardBoards}</b>枚 ・ 計{' '}
+                    <b className="text-gray-800">{r.totalBoards}</b>枚
+                  </div>
+                  {differs && (
+                    <div className="mt-0.5 text-[13px] text-gray-500">
+                      床板{h.inputs.boardWidth} ・ 目地{h.inputs.jointWidth} ・ 最低{h.inputs.minBoardWidth} ・ {EDGE_SHORT_LABEL[h.inputs.edgeMode]}
+                    </div>
+                  )}
+                  <MemoRow value={h.memo || ''} onSave={(m) => onMemo(h.id, m)} />
+                </div>
+              );
+            })}
+          </div>
+        ))}
         {items.length > 0 && (
-          <button onClick={onClearAll} className="block mx-auto mt-2 text-[13px] text-gray-400 px-3 py-1">
+          <button onClick={onClearAll} className="block mx-auto mt-3 text-sm text-gray-400 px-3 py-1.5">
             すべて消す
           </button>
         )}
@@ -1049,6 +1083,7 @@ https://lasco.jp/`;
       {showHistory && (
         <HistorySheet
           items={history}
+          activeId={(history.find((h) => chosenActive && h.sig === currentSig && sameResult(h.result, chosenActive.result)) || {}).id}
           onClose={() => setShowHistory(false)}
           onRestore={restoreHistory}
           onDelete={(id) => setHistory((prev) => prev.filter((h) => h.id !== id))}
