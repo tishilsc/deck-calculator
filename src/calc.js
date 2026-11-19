@@ -1,7 +1,7 @@
 // 床板割付の計算ロジック（画面に依存しない純粋関数）
 
 export const MAX_BOARDS = 1000;
-export const STEP = 1; // 幅調整板の丸め単位(mm)。現場で最後の1枚は実寸を見て加工するため1mm刻み
+export const STEP = 0.5; // 幅調整板の丸め単位(mm)。0.5mm刻みで出すと、微調整が必要な板かどうかを判断しやすい
 const ZERO_TOL = 0.5; // 調整板なし（定尺のみ）とみなす許容差(mm)
 
 // 両端の目地: both=両端にあり / one=片側のみ / none=なし

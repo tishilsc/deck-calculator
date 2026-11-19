@@ -112,10 +112,10 @@ test('調整板の幅が定尺幅と同じ案（実質カットなし）は出�
   }
 });
 
-test('調整板の幅は1mm刻み', () => {
+test('調整板の幅は0.5mm刻み', () => {
   for (const W of [3000, 3123, 4560, 3333]) {
     for (const s of [...calculateBoards({ ...base, W, edgeMode: 'both' }), ...calculateTweaks({ ...base, W, edgeMode: 'both' })]) {
-      if (s.adjustedWidth != null) assert.equal(s.adjustedWidth, Math.round(s.adjustedWidth), `W=${W}`);
+      if (s.adjustedWidth != null) assert.equal(s.adjustedWidth * 2, Math.round(s.adjustedWidth * 2), `W=${W}`);
     }
   }
 });
