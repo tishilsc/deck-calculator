@@ -26,7 +26,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg}'],
-        navigateFallback: '/index.html'
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/_vercel/]
       }
     })
   ],
