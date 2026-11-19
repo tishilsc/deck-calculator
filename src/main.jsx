@@ -1,4 +1,5 @@
 import { registerSW } from 'virtual:pwa-register';
+import { inject } from '@vercel/analytics';
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
@@ -22,3 +23,6 @@ registerSW({
     window.dispatchEvent(new Event('deck-offline-ready'));
   }
 });
+
+// 利用状況の計測（Vercel Web Analytics。Cookieは使わず、個人は特定しない）
+inject();
