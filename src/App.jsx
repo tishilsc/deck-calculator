@@ -502,15 +502,15 @@ https://lasco.jp/`;
   };
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 p-4 ${chosenActive ? 'pb-80' : ''}`}>
+    <div className={`min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 px-3 pt-1.5 pb-4 ${chosenActive ? 'pb-80' : ''}`}>
       <div className="max-w-2xl mx-auto">
-        <div className="flex items-center gap-2 px-1 pb-3">
-          <div className="w-8 h-8 flex-none"><AppLogo /></div>
+        <div className="flex items-center gap-2 px-1 pb-1.5">
+          <div className="w-7 h-7 flex-none"><AppLogo /></div>
           <h1 className="text-base font-bold text-gray-800 whitespace-nowrap">床板計算</h1>
           {!installed && (
             <button
               onClick={() => setShowGuide(true)}
-              className="ml-auto flex items-center gap-1 whitespace-nowrap rounded-lg border border-gray-300 bg-white/70 text-gray-600 text-xs font-bold px-2 py-1.5"
+              className="ml-auto flex items-center gap-1 whitespace-nowrap rounded-lg border border-gray-300 bg-white/70 text-gray-600 text-xs font-bold px-2 py-1"
             >
               <span className="w-4 h-4"><IconAddHome /></span>
               ホーム画面に追加
@@ -518,7 +518,7 @@ https://lasco.jp/`;
           )}
           <button
             onClick={() => setShowVersionInfo(!showVersionInfo)}
-            className={`${installed ? 'ml-auto ' : ''}p-2 rounded-lg text-gray-500`}
+            className={`${installed ? 'ml-auto ' : ''}p-1.5 rounded-lg text-gray-500`}
             aria-label="バージョン情報"
           >
             <Info className="w-5 h-5" />
