@@ -34,7 +34,8 @@ function enumerate({ W, B, J, Bmin, edgeMode }, maxTweak) {
     const kLimit = Math.min(maxTweak, jointNum);
     // 最大限に狭めても定尺板だけで施工幅を超えるなら、これ以上枚数を増やしても無理
     const narrowest = baseJointWidth - (canNarrow ? kLimit * JOINT_EXTRA : 0);
-    if (totalBoards * Bmin + narrowest > W + STEP) break;
+    // （板幅は STEP 刻みに丸めるため、1枚あたり STEP/2 まで最低幅を下回って丸め上がる案も有効。その分の余裕を見る）
+    if (totalBoards * Bmin + narrowest > W + totalBoards * (STEP / 2) + STEP) break;
 
     for (let adjustedBoards = 0; adjustedBoards <= totalBoards; adjustedBoards++) {
       const standardBoards = totalBoards - adjustedBoards;

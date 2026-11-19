@@ -128,3 +128,12 @@ test('設定どおりの案よりカット板が狭くなる調整案には narr
   assert.equal(z.adjustedBoards, 0);
   assert.equal(z.narrowerBy, 0);
 });
+
+test('丸めれば最低幅を満たす境界の案も漏れない（打ち切りの余裕）', () => {
+  // 施工幅514・両端あり: 6枚を各 479/6=79.83mm → 0.5mm刻みで80mm（最低幅）。以前は打ち切りで漏れていた
+  const r = calculateBoards({ W: 514, B: 145, J: 5, Bmin: 80, edgeMode: 'both' });
+  assert.ok(r.some((s) => s.totalBoards === 6 && s.adjustedBoards === 6 && s.adjustedWidth === 80));
+  // 最低幅が床板幅にほぼ等しい条件
+  const q = calculateBoards({ W: 5832, B: 142, J: 5, Bmin: 141, edgeMode: 'none' });
+  assert.ok(q.length > 0);
+});
