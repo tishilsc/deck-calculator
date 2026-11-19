@@ -43,6 +43,12 @@ const AppLogo = () => (
 const IconSliders = () => (
   <svg {...svgProps} strokeWidth={2.4}><path d="M4 7h10M18 7h2M4 17h2M10 17h10" /><circle cx="16" cy="7" r="2" /><circle cx="8" cy="17" r="2" /></svg>
 );
+const IconAddHome = () => (
+  <svg {...svgProps} strokeWidth={2.2}><rect x="4" y="4" width="16" height="16" rx="3.5" /><path d="M12 8.5v7M8.5 12h7" /></svg>
+);
+const IconDots = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" /></svg>
+);
 const IconClose = () => (
   <svg {...svgProps} strokeWidth={2.6}><path d="M6 6l12 12M18 6L6 18" /></svg>
 );
@@ -168,6 +174,102 @@ function AdoptBar({ chosen, installWidth, boardWidth, jointWidth, onShare, onCle
   );
 }
 
+// ホーム画面に追加する方法の案内（iPhone / Android）
+const isStandalone = () => {
+  try {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  } catch (e) {
+    return false;
+  }
+};
+const detectPlatform = () => {
+  const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+  if (/android/i.test(ua)) return 'android';
+  if (/iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1)) return 'ios';
+  return 'ios';
+};
+
+function Step({ n, children }) {
+  return (
+    <li className="flex gap-3 items-start">
+      <span className="flex-none w-7 h-7 rounded-full bg-amber-500 text-white text-sm font-extrabold flex items-center justify-center">{n}</span>
+      <div className="text-[15px] leading-7 text-gray-800">{children}</div>
+    </li>
+  );
+}
+
+function HomeScreenGuide({ onClose, installPrompt, onInstall }) {
+  const [tab, setTab] = useState(detectPlatform);
+  return (
+    <div className="fixed inset-0 z-20 bg-black/40 flex items-end" onClick={onClose}>
+      <div
+        className="w-full max-w-2xl mx-auto bg-white rounded-t-2xl p-4 pb-6 max-h-[90vh] overflow-y-auto"
+        role="dialog"
+        aria-label="ホーム画面に追加する方法"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <span className="w-9 h-9 flex-none"><AppLogo /></span>
+          <h2 className="font-bold text-gray-900 text-lg">ホーム画面に追加</h2>
+          <button onClick={onClose} aria-label="閉じる" className="ml-auto w-9 h-9 rounded-lg bg-gray-100 text-gray-500 p-2"><IconClose /></button>
+        </div>
+        <p className="text-[13px] text-gray-500 mb-3">アプリのように1タップで開けます。一度開いておけば、電波がなくても使えます。</p>
+
+        <div className="grid grid-cols-2 bg-gray-100 rounded-lg p-1 mb-4" role="tablist">
+          {[['ios', 'iPhone'], ['android', 'Android']].map(([k, label]) => (
+            <button
+              key={k}
+              role="tab"
+              aria-selected={tab === k}
+              onClick={() => setTab(k)}
+              className={`py-2.5 rounded-md text-sm font-bold ${tab === k ? 'bg-white text-amber-700 shadow' : 'text-gray-500'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'ios' ? (
+          <ol className="space-y-3">
+            <Step n={1}>
+              画面の下（または上）の <b>共有ボタン</b>
+              <span className="inline-block align-middle w-5 h-5 mx-1 text-blue-600"><IconShare /></span>
+              をタップ
+            </Step>
+            <Step n={2}>メニューを下にスクロールして <b>「ホーム画面に追加」</b> をタップ</Step>
+            <Step n={3}>右上の <b>「追加」</b> をタップ</Step>
+            <li className="text-[13px] text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+              LINE・メールなどの中で開いている場合は、右下や右上のメニューから <b>「Safariで開く」</b> を選んでから行ってください。
+            </li>
+          </ol>
+        ) : (
+          <ol className="space-y-3">
+            {installPrompt && (
+              <li>
+                <button
+                  onClick={onInstall}
+                  className="w-full flex items-center justify-center gap-2 bg-amber-500 text-white font-bold rounded-xl py-3 text-base"
+                >
+                  <span className="w-5 h-5"><IconAddHome /></span>
+                  ホーム画面に追加する
+                </button>
+                <div className="text-[13px] text-gray-500 mt-1 text-center">ボタンで追加できない場合は、下の手順で行ってください</div>
+              </li>
+            )}
+            <Step n={1}>
+              Chromeの右上の <b>メニュー</b>
+              <span className="inline-block align-middle w-5 h-5 mx-1 text-gray-700"><IconDots /></span>
+              をタップ
+            </Step>
+            <Step n={2}><b>「ホーム画面に追加」</b>（または <b>「アプリをインストール」</b>）をタップ</Step>
+            <Step n={3}>確認の画面で <b>「追加」</b>（または「インストール」）をタップ</Step>
+          </ol>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const CHOSEN_KEY = 'deckCalculatorChosen';
 function loadChosen() {
   try {
@@ -187,6 +289,38 @@ export default function App() {
   const [chosen, setChosen] = useState(loadChosen);
   const [showVersionInfo, setShowVersionInfo] = useState(false);
   const [showCond, setShowCond] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [installed, setInstalled] = useState(isStandalone);
+  const [installPrompt, setInstallPrompt] = useState(null);
+
+  // Androidのブラウザがワンタップ追加に対応している場合は、そのボタンも出す
+  React.useEffect(() => {
+    const onPrompt = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    const onInstalled = () => {
+      setInstalled(true);
+      setShowGuide(false);
+    };
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onPrompt);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, []);
+
+  const runInstall = async () => {
+    if (!installPrompt) return;
+    try {
+      installPrompt.prompt();
+      await installPrompt.userChoice;
+    } catch (e) {
+      // 取り消しなどは無視
+    }
+    setInstallPrompt(null);
+  };
 
   const version = '2026.11.19';
   const updateHistory = [
@@ -196,6 +330,7 @@ export default function App() {
         'オフライン対応（一度開けば電波がなくても使えます）',
         '入力欄を刷新（施工幅を大きく・入力すると自動で計算・条件は折りたたみ）',
         'アイコンを刷新（ホーム画面用のアイコンも追加）',
+        '「ホーム画面に追加」の案内を追加（iPhone／Android）',
         '端の目地を「両端にあり／片側のみ／なし」から選択可能に（初期値は両端にあり）',
         '最大試行枚数を1000枚に戻し、広い施工幅でも提案が出るように修正',
         '定尺板だけで収まる場合も提案するように変更',
@@ -371,11 +506,19 @@ https://lasco.jp/`;
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center gap-2 px-1 pb-3">
           <div className="w-8 h-8 flex-none"><AppLogo /></div>
-          <h1 className="text-base font-bold text-gray-800">床板計算</h1>
-          <span className="text-[11px] text-gray-400">v{version}</span>
+          <h1 className="text-base font-bold text-gray-800 whitespace-nowrap">床板計算</h1>
+          {!installed && (
+            <button
+              onClick={() => setShowGuide(true)}
+              className="ml-auto flex items-center gap-1 whitespace-nowrap rounded-lg border border-gray-300 bg-white/70 text-gray-600 text-xs font-bold px-2 py-1.5"
+            >
+              <span className="w-4 h-4"><IconAddHome /></span>
+              ホーム画面に追加
+            </button>
+          )}
           <button
             onClick={() => setShowVersionInfo(!showVersionInfo)}
-            className="ml-auto p-2 rounded-lg text-gray-500"
+            className={`${installed ? 'ml-auto ' : ''}p-2 rounded-lg text-gray-500`}
             aria-label="バージョン情報"
           >
             <Info className="w-5 h-5" />
@@ -384,7 +527,7 @@ https://lasco.jp/`;
 
         {showVersionInfo && (
           <div className="mb-3 bg-white rounded-xl p-4 border-2 border-gray-200">
-            <h3 className="font-bold text-gray-800 mb-3">バージョン情報</h3>
+            <h3 className="font-bold text-gray-800 mb-3">バージョン情報 <span className="ml-1 text-xs font-mono bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">v{version}</span></h3>
             <div className="space-y-4 max-h-64 overflow-y-auto">
               {updateHistory.map((update, index) => (
                 <div key={index} className="border-l-4 border-amber-500 pl-3">
@@ -596,6 +739,8 @@ https://lasco.jp/`;
           </div>
         </div>
       </div>
+      {showGuide && <HomeScreenGuide onClose={() => setShowGuide(false)} installPrompt={installPrompt} onInstall={runInstall} />}
+
       {chosenActive && (
         <AdoptBar
           chosen={chosenActive}
