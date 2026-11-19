@@ -15,3 +15,13 @@ body {
 #root {
   min-height: 100vh;
 }
+
+/* 数値入力の増減ボタンは使わない（手入力のみ） */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}

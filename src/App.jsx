@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calculator, Hammer, AlertCircle, Info } from 'lucide-react';
+import { AlertCircle, Info } from 'lucide-react';
 import { calculateBoards as calc, calculateTweaks as calcTweaks, validateInputs, JOINT_EXTRA } from './calc';
 
 const EDGE_OPTIONS = [
@@ -8,6 +8,7 @@ const EDGE_OPTIONS = [
   { value: 'none', label: 'なし' }
 ];
 const EDGE_LABEL = { both: '両端にあり', one: '片側のみ', none: 'なし' };
+const EDGE_SHORT = { both: '両端あり', one: '片側のみ', none: '端なし' };
 
 const svgProps = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
 const IconBoard = () => (
@@ -24,6 +25,21 @@ const IconCheck = () => (
 );
 const IconShare = () => (
   <svg {...svgProps} strokeWidth={2.2}><path d="M12 15V3M7.5 7.5L12 3l4.5 4.5M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6" /></svg>
+);
+const IconChevron = ({ up }) => (
+  <svg {...svgProps} strokeWidth={2.6}>{up ? <path d="M6 15l6-6 6 6" /> : <path d="M6 9l6 6 6-6" />}</svg>
+);
+// アプリのロゴ（ホーム画面のアイコンと同じ意匠）
+const AppLogo = () => (
+  <svg viewBox="0 0 64 64" aria-hidden="true">
+    <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#fbbf24" /><stop offset="1" stopColor="#f97316" /></linearGradient></defs>
+    <rect width="64" height="64" rx="14" fill="url(#lg)" />
+    <rect x="11" y="11" width="10" height="32" rx="1.6" fill="#ffffff" />
+    <rect x="23.5" y="11" width="10.0" height="32" rx="1.6" fill="#ffffff" />
+    <rect x="36" y="11" width="10" height="32" rx="1.6" fill="#ffffff" />
+    <rect x="48.5" y="11" width="4.5" height="32" rx="1.6" fill="#7c2d12" />
+    <path d="M11 52H53M11 48.5V55.5M53 48.5V55.5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+  </svg>
 );
 const IconClose = () => (
   <svg {...svgProps} strokeWidth={2.6}><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -168,6 +184,7 @@ export default function App() {
   const [results, setResults] = useState(null);
   const [chosen, setChosen] = useState(loadChosen);
   const [showVersionInfo, setShowVersionInfo] = useState(false);
+  const [showCond, setShowCond] = useState(false);
 
   const version = '2026.11.19';
   const updateHistory = [
@@ -175,6 +192,8 @@ export default function App() {
       version: '2026.11.19',
       changes: [
         'オフライン対応（一度開けば電波がなくても使えます）',
+        '入力欄を刷新（施工幅を大きく・入力すると自動で計算・条件は折りたたみ）',
+        'アイコンを刷新（ホーム画面用のアイコンも追加）',
         '端の目地を「両端にあり／片側のみ／なし」から選択可能に（初期値は両端にあり）',
         '最大試行枚数を1000枚に戻し、広い施工幅でも提案が出るように修正',
         '定尺板だけで収まる場合も提案するように変更',
@@ -317,30 +336,18 @@ https://lasco.jp/`;
     return { normal, tweaks };
   };
 
-  const calculateBoards = () => {
-    const W = parseFloat(installWidth);
-    const B = parseFloat(boardWidth);
-    const J = parseFloat(jointWidth);
-    const Bmin = parseFloat(minBoardWidth);
-
-    if (!(W > 0) || !(B > 0) || !(J >= 0) || !(Bmin > 0)) {
-      alert('正しい数値を入力してください');
-      return;
-    }
-
-    if (Bmin > B) {
-      alert('最低床板幅が通常の板幅より大きくなっています');
-      return;
-    }
-
-    setResults(computeResults());
-  };
-
-  // 採用した案が保存されていて条件が同じなら、開いたときに候補を再表示する
+  // 入力が変わったら自動で計算する（入力途中のちらつきを避けるため、少し待ってから）
   React.useEffect(() => {
-    if (chosenActive && results === null) setResults(computeResults());
+    const noErrors = Object.keys(errors).length === 0;
+    const ready = noErrors && parseFloat(installWidth) > 0 && parseFloat(boardWidth) > 0 && parseFloat(minBoardWidth) > 0 && parseFloat(jointWidth) >= 0;
+    if (!ready) {
+      setResults(null);
+      return undefined;
+    }
+    const timer = setTimeout(() => setResults(computeResults()), results === null ? 0 : 500);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chosenActive]);
+  }, [installWidth, boardWidth, jointWidth, minBoardWidth, edgeMode, errors]);
 
   // 採用案を保存
   React.useEffect(() => {
@@ -360,167 +367,146 @@ https://lasco.jp/`;
   return (
     <div className={`min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 p-4 ${chosenActive ? 'pb-80' : ''}`}>
       <div className="max-w-2xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="bg-amber-500 p-3 rounded-xl">
-              <Hammer className="w-6 h-6 text-white" />
+        <div className="flex items-center gap-2 px-1 pb-3">
+          <div className="w-8 h-8 flex-none"><AppLogo /></div>
+          <h1 className="text-base font-bold text-gray-800">床板計算</h1>
+          <span className="text-[11px] text-gray-400">v{version}</span>
+          <button
+            onClick={() => setShowVersionInfo(!showVersionInfo)}
+            className="ml-auto p-2 rounded-lg text-gray-500"
+            aria-label="バージョン情報"
+          >
+            <Info className="w-5 h-5" />
+          </button>
+        </div>
+
+        {showVersionInfo && (
+          <div className="mb-3 bg-white rounded-xl p-4 border-2 border-gray-200">
+            <h3 className="font-bold text-gray-800 mb-3">バージョン情報</h3>
+            <div className="space-y-4 max-h-64 overflow-y-auto">
+              {updateHistory.map((update, index) => (
+                <div key={index} className="border-l-4 border-amber-500 pl-3">
+                  <div className="text-sm font-semibold text-gray-700 mb-1">{update.version}</div>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    {update.changes.map((change, changeIndex) => (
+                      <li key={changeIndex}>• {change}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </div>
-            <div className="flex-1">
-              <h1 className="text-2xl font-bold text-gray-800">ウッドデッキ床板計算ツール</h1>
+          </div>
+        )}
+
+        <div className="bg-white rounded-2xl shadow p-3 mb-3">
+          <div className={`flex items-center gap-2 rounded-xl border-2 px-3 py-1 bg-amber-50 ${errors.installWidth ? 'border-red-500' : 'border-amber-400'}`}>
+            <label htmlFor="installWidth" className="text-sm font-bold text-amber-800 flex-none">施工幅</label>
+            <input
+              id="installWidth"
+              type="number"
+              inputMode="decimal"
+              value={installWidth}
+              onChange={(e) => setInstallWidth(e.target.value)}
+              onFocus={(e) => e.target.select()}
+              className="min-w-0 flex-1 bg-transparent text-right text-[38px] leading-tight font-extrabold text-gray-900 placeholder-gray-300 focus:outline-none"
+              placeholder="3000"
+            />
+            <span className="text-base font-bold text-gray-500 flex-none">mm</span>
+            {installWidth && (
+              <button
+                onClick={() => setInstallWidth('')}
+                aria-label="施工幅を消す"
+                className="flex-none w-6 h-6 rounded-full bg-gray-200 text-gray-500 p-1"
+              >
+                <IconClose />
+              </button>
+            )}
+          </div>
+          {errors.installWidth && <p className="text-red-600 text-sm mt-1">{errors.installWidth}</p>}
+
+          <div className="flex items-center gap-2 mt-2">
+            <div className="flex flex-wrap gap-1.5 flex-1 text-[13px] text-gray-600">
+              <span className="bg-gray-100 rounded-full px-2 py-0.5">床板 <b className="text-gray-900">{boardWidth || '–'}</b></span>
+              <span className="bg-gray-100 rounded-full px-2 py-0.5">目地 <b className="text-gray-900">{jointWidth || '–'}</b></span>
+              <span className="bg-gray-100 rounded-full px-2 py-0.5">最低 <b className="text-gray-900">{minBoardWidth || '–'}</b></span>
+              <span className="bg-gray-100 rounded-full px-2 py-0.5">{EDGE_SHORT[edgeMode]}</span>
             </div>
             <button
-              onClick={() => setShowVersionInfo(!showVersionInfo)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              title="バージョン情報"
+              onClick={() => setShowCond(!showCond)}
+              className={`flex-none flex items-center gap-0.5 text-[13px] font-bold px-2 py-1 rounded-lg ${
+                Object.keys(errors).some((k) => k !== 'installWidth') ? 'text-red-600' : 'text-amber-600'
+              }`}
             >
-              <Info className="w-5 h-5 text-gray-600" />
+              条件を{showCond ? '閉じる' : '変更'}
+              <span className="w-4 h-4"><IconChevron up={showCond} /></span>
             </button>
           </div>
 
-          {showVersionInfo && (
-            <div className="mb-6 bg-gray-50 rounded-xl p-4 border-2 border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold text-gray-800">バージョン情報</h3>
-                <span className="text-sm font-mono bg-amber-100 text-amber-800 px-3 py-1 rounded-full">
-                  v{version}
-                </span>
-              </div>
-              
-              <div className="space-y-4 max-h-64 overflow-y-auto">
-                {updateHistory.map((update, index) => (
-                  <div key={index} className="border-l-4 border-amber-500 pl-3">
-                    <div className="text-sm font-semibold text-gray-700 mb-1">
-                      {update.version}
+          {showCond && (
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  ['boardWidth', '床板幅', boardWidth, setBoardWidth, '150'],
+                  ['jointWidth', '目地幅', jointWidth, setJointWidth, '5'],
+                  ['minBoardWidth', '最低床板幅', minBoardWidth, setMinBoardWidth, '80']
+                ].map(([key, label, value, setter, ph]) => (
+                  <div key={key}>
+                    <label htmlFor={key} className="block text-[13px] font-bold text-gray-600 mb-1">{label}</label>
+                    <div className={`flex items-baseline justify-center gap-1 rounded-lg border-2 px-1 py-1.5 ${errors[key] ? 'border-red-500' : 'border-gray-200'}`}>
+                      <input
+                        id={key}
+                        type="number"
+                        inputMode="decimal"
+                        value={value}
+                        onChange={(e) => setter(e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                        className="w-full min-w-0 text-center text-[22px] font-bold text-gray-900 bg-transparent focus:outline-none"
+                        placeholder={ph}
+                      />
+                      <span className="text-xs text-gray-500">mm</span>
                     </div>
-                    <ul className="text-sm text-gray-600 space-y-1">
-                      {update.changes.map((change, changeIndex) => (
-                        <li key={changeIndex}>• {change}</li>
-                      ))}
-                    </ul>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                施工幅（mm）
-              </label>
-              <input
-                type="number"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={installWidth}
-                onChange={(e) => setInstallWidth(e.target.value)}
-                onFocus={(e) => e.target.select()}
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none text-lg ${
-                  errors.installWidth ? 'border-red-500' : 'border-gray-200 focus:border-amber-500'
-                }`}
-                placeholder="3000"
-              />
-              {errors.installWidth && (
-                <p className="text-red-600 text-sm mt-1">{errors.installWidth}</p>
+              {['boardWidth', 'jointWidth', 'minBoardWidth'].map((k) =>
+                errors[k] ? <p key={k} className="text-red-600 text-sm mt-1">{errors[k]}</p> : null
               )}
-            </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                床板幅（mm）
-              </label>
-              <input
-                type="number"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={boardWidth}
-                onChange={(e) => setBoardWidth(e.target.value)}
-                onFocus={(e) => e.target.select()}
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none text-lg ${
-                  errors.boardWidth ? 'border-red-500' : 'border-gray-200 focus:border-amber-500'
-                }`}
-                placeholder="150"
-              />
-              {errors.boardWidth && (
-                <p className="text-red-600 text-sm mt-1">{errors.boardWidth}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                目地幅（mm）
-              </label>
-              <input
-                type="number"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={jointWidth}
-                onChange={(e) => setJointWidth(e.target.value)}
-                onFocus={(e) => e.target.select()}
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none text-lg ${
-                  errors.jointWidth ? 'border-red-500' : 'border-gray-200 focus:border-amber-500'
-                }`}
-                placeholder="5"
-              />
-              {errors.jointWidth && (
-                <p className="text-red-600 text-sm mt-1">{errors.jointWidth}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                最低床板幅（mm）
-              </label>
-              <input
-                type="number"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={minBoardWidth}
-                onChange={(e) => setMinBoardWidth(e.target.value)}
-                onFocus={(e) => e.target.select()}
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none text-lg ${
-                  errors.minBoardWidth ? 'border-red-500' : 'border-gray-200 focus:border-amber-500'
-                }`}
-                placeholder="80"
-              />
-              {errors.minBoardWidth && (
-                <p className="text-red-600 text-sm mt-1">{errors.minBoardWidth}</p>
-              )}
-            </div>
-
-            <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
-              <div className="text-sm font-semibold text-gray-700 mb-3">端の目地</div>
-              <div className="space-y-2">
+              <div className="text-[13px] font-bold text-gray-600 mt-3 mb-1">端の目地</div>
+              <div className="grid grid-cols-3 bg-gray-100 rounded-lg p-1" role="radiogroup" aria-label="端の目地">
                 {EDGE_OPTIONS.map((opt) => (
-                  <label key={opt.value} className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="edgeMode"
-                      value={opt.value}
-                      checked={edgeMode === opt.value}
-                      onChange={() => setEdgeMode(opt.value)}
-                      className="w-5 h-5 border-gray-300 text-amber-500 focus:ring-amber-500 cursor-pointer"
-                    />
-                    <div className="text-sm font-semibold text-gray-700">{opt.label}</div>
-                  </label>
+                  <button
+                    key={opt.value}
+                    role="radio"
+                    aria-checked={edgeMode === opt.value}
+                    onClick={() => setEdgeMode(opt.value)}
+                    className={`py-2.5 rounded-md text-sm font-bold ${
+                      edgeMode === opt.value ? 'bg-amber-500 text-white shadow' : 'text-gray-500'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
                 ))}
               </div>
-            </div>
 
-            <button
-              onClick={calculateBoards}
-              disabled={Object.keys(errors).length > 0 || !installWidth}
-              className={`w-full font-bold py-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-lg shadow-lg ${
-                Object.keys(errors).length > 0 || !installWidth
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-amber-500 hover:bg-amber-600 text-white'
-              }`}
-            >
-              <Calculator className="w-5 h-5" />
-              計算する
-            </button>
-          </div>
+              {chosenActive && (
+                <div className="mt-3 text-[13px] text-amber-800 bg-amber-50 border border-amber-300 rounded-lg px-3 py-1.5">
+                  ⚠ 条件を変えると、採用中の案は解除されます
+                </div>
+              )}
+            </div>
+          )}
         </div>
+
+        {!results && !installWidth && (
+          <div className="text-center px-5 py-10 text-gray-500">
+            <div className="text-base font-bold text-gray-700 mb-2">施工幅を入力してください</div>
+            <div className="text-[13px] leading-7">
+              入力すると、すぐに候補が出ます。<br />
+              使う案は「採用」で画面下に固定できます。
+            </div>
+          </div>
+        )}
 
         {results && (
           <div>
@@ -538,11 +524,6 @@ https://lasco.jp/`;
               </div>
             ) : (
               <>
-                {results.normal.length > 0 && (
-                  <div className="text-sm font-bold text-amber-800 mx-1 mb-2">
-                    設定どおりの目地 <span className="font-normal text-xs text-gray-400 ml-1">カットが少なく、幅が広い順</span>
-                  </div>
-                )}
                 {results.normal.map((r, i) => (
                   <ResultRow
                     key={`n${i}`}
@@ -579,26 +560,6 @@ https://lasco.jp/`;
             )}
           </div>
         )}
-
-        <div className="mt-8 bg-blue-50 rounded-xl p-6 border-2 border-blue-200">
-          <h3 className="font-bold text-blue-900 mb-3 flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" />
-            使い方
-          </h3>
-          <ul className="text-sm text-blue-800 space-y-2">
-            <li>• <strong>施工幅</strong>: ウッドデッキの全体幅を入力</li>
-            <li>• <strong>床板幅</strong>: 定尺の床板幅（例: 150mm、105mm）</li>
-            <li>• <strong>目地幅</strong>: 床板間の隙間（例: 5mm）</li>
-            <li>• <strong>最低床板幅</strong>: カット後の最小許容幅</li>
-            <li>• 定尺板だけで収まる場合は「カット不要」の案が先頭に出ます</li>
-            <li>• 一度開けば、電波がなくてもオフラインで使えます</li>
-            <li>• <strong>目地の微調整</strong>: 施工幅が少し余るとき、必要最小限の目地を+1mmして加工を減らす案を出します</li>
-            <li>• 目地を最小限の箇所だけ±1mmすれば加工が減る案は、「目地を少し調整すると」の枠に別に出します</li>
-            <li>• 幅調整板は1mm単位で表示します（最後の1枚は現場で実寸に合わせて加工）</li>
-            <li>• 調整枚数が少なく、幅が広い順に表示されます</li>
-            <li>• 使う案の「採用」を押すと、画面の下に作業内容が固定表示されます</li>
-          </ul>
-        </div>
 
         <div className="mt-6 text-center pb-4">
           <a 
