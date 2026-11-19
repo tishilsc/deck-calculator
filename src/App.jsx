@@ -1076,18 +1076,17 @@ https://lasco.jp/`;
           </div>
         )}
 
-        <div className="mt-4 pt-2.5 pb-2 border-t border-amber-200 flex items-center justify-between gap-2">
+        <div className="mt-4 pt-2.5 pb-2 border-t border-amber-200 flex items-center gap-2">
           <a
             href="https://lasco.jp/"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 text-xs text-gray-500 min-w-0"
           >
-            <span className="flex-none w-6 h-6 rounded-md bg-gradient-to-br from-amber-400 to-orange-500 text-white text-[13px] font-black flex items-center justify-center shadow-sm" aria-hidden="true">L</span>
+            <img src="/company-logo.png" alt="LASCO" width="204" height="64" className="flex-none h-6 w-auto" />
             <span className="whitespace-nowrap">Powered by <b className="text-gray-700">株式会社ラスコジャパン</b></span>
             <span className="flex-none w-3.5 h-3.5 text-gray-400"><IconExternal /></span>
           </a>
-          <span className="flex-none text-[11px] text-gray-400">v{version}</span>
         </div>
       </div>
       {offlineToast && (
