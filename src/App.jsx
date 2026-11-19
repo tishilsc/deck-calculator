@@ -735,12 +735,6 @@ https://lasco.jp/`;
               </button>
             </div>
           )}
-
-          {chosenActive && (
-            <div className="mt-2 text-[13px] text-amber-800 bg-amber-50 border border-amber-300 rounded-lg px-3 py-1.5">
-              ⚠ 条件を変えると採用は解除されます
-            </div>
-          )}
         </div>
 
         {!results && !installWidth && (
