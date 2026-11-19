@@ -314,7 +314,7 @@ function loadChosen() {
 
 export default function App() {
   const [installWidth, setInstallWidth] = useState('');
-  const [boardWidth, setBoardWidth] = useState('150');
+  const [boardWidth, setBoardWidth] = useState('145');
   const [jointWidth, setJointWidth] = useState('5');
   const [minBoardWidth, setMinBoardWidth] = useState('80');
   const [edgeMode, setEdgeMode] = useState('both');
@@ -398,6 +398,7 @@ export default function App() {
         'オフライン対応（一度開けば電波がなくても使えます。使えるようになると画面上に表示します。バージョン情報にオフライン診断を追加）',
         '入力欄を刷新（施工幅を大きく・入力すると自動で計算・条件は折りたたみ）',
         'アイコンを刷新（ホーム画面用のアイコンも追加）',
+        '床板幅の初期値を145mmに変更（以前に入力した値は、そのまま引き継がれます）',
         '「ホーム画面に追加」の案内を追加（iPhone／Android）',
         '端の目地を「両端にあり／片側のみ／なし」から選択可能に（初期値は両端にあり）',
         '最大試行枚数を1000枚に戻し、広い施工幅でも提案が出るように修正',
@@ -701,7 +702,7 @@ https://lasco.jp/`;
             <div className="mt-3 pt-3 border-t border-gray-200">
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  ['boardWidth', '床板幅', boardWidth, setBoardWidth, '150'],
+                  ['boardWidth', '床板幅', boardWidth, setBoardWidth, '145'],
                   ['jointWidth', '目地幅', jointWidth, setJointWidth, '5'],
                   ['minBoardWidth', '最低床板幅', minBoardWidth, setMinBoardWidth, '80']
                 ].map(([key, label, value, setter, ph]) => (
